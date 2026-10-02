@@ -1,12 +1,18 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import { AdSlot } from '@/components/AdSlot';
 import { AppScreen } from '@/components/AppScreen';
 import { colors, radius, space } from '@/constants/theme';
 import { useEditor } from '@/context/EditorContext';
-import { getCurrentUserId, isSupabaseConfigured } from '@/lib/supabase';
+import {
+  getAccountInfo,
+  isSupabaseConfigured,
+  signOutAccount,
+  type AccountInfo,
+} from '@/lib/supabase';
 
 const ROWS = [
   { title: 'Account', body: 'Sign-in arrives with Supabase in the next pass.' },
@@ -16,23 +22,57 @@ const ROWS = [
 ];
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { balance, ledger } = useEditor();
-  const [userId, setUserId] = useState<string | null>(null);
+  const [account, setAccount] = useState<AccountInfo | null>(null);
+  const [accountLoading, setAccountLoading] = useState(true);
 
-  useEffect(() => {
-    getCurrentUserId()
-      .then(setUserId)
-      .catch(() => {});
+  const reloadAccount = useCallback(() => {
+    setAccountLoading(true);
+    getAccountInfo()
+      .then(setAccount)
+      .catch(() => {})
+      .finally(() => setAccountLoading(false));
   }, []);
+
+  useFocusEffect(reloadAccount);
+
+  function confirmSignOut() {
+    const guest = !account?.email;
+    Alert.alert(
+      'Sign out?',
+      guest
+        ? 'Guest identities cannot be recovered. Your private jobs stay on the server but this device loses access to them.'
+        : 'You can sign back in anytime with your email.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: () => {
+            signOutAccount()
+              .then(reloadAccount)
+              .catch(() => {});
+          },
+        },
+      ]
+    );
+  }
+
+  const accountBody = !isSupabaseConfigured()
+    ? 'Local mode. Sign-in activates with the Supabase backend.'
+    : accountLoading
+      ? 'Signing in…'
+      : account?.email
+        ? `${account.email}${account.emailConfirmed ? '' : ' (unconfirmed — check your inbox)'}`
+        : account
+          ? `Guest account ${account.id.slice(0, 8)}. Jobs and photos stay private to this device.`
+          : 'Not signed in.';
 
   const rows = [
     {
       title: 'Account',
-      body: isSupabaseConfigured()
-        ? userId
-          ? `Guest account ${userId.slice(0, 8)}. Jobs and photos stay private to this device.`
-          : 'Signing in…'
-        : 'Local mode. Sign-in activates with the Supabase backend.',
+      body: accountBody,
     },
     {
       title: 'Backend',
@@ -56,6 +96,22 @@ export default function ProfileScreen() {
             <Text style={styles.body}>{row.body}</Text>
           </View>
         ))}
+        {isSupabaseConfigured() && account && !account.email ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/auth')}
+            style={styles.link}>
+            <Text style={styles.linkLabel}>Back up with email →</Text>
+          </Pressable>
+        ) : null}
+        {isSupabaseConfigured() && account ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={confirmSignOut}
+            style={styles.link}>
+            <Text style={styles.linkLabel}>Sign out</Text>
+          </Pressable>
+        ) : null}
         {ledger.length > 0 ? (
           <View style={styles.card}>
             <Text style={styles.title}>Recent activity</Text>
@@ -100,5 +156,13 @@ const styles = StyleSheet.create({
   body: {
     color: colors.textMuted,
     lineHeight: 20,
+  },
+  link: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  linkLabel: {
+    color: colors.accent,
+    fontWeight: '700',
   },
 });

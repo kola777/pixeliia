@@ -34,6 +34,7 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: colors.background },
         }}>
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        <Stack.Screen name="auth" options={{ title: 'Sign in' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="editor/[toolId]" options={{ title: 'Edit' }} />
         <Stack.Screen name="export" options={{ title: 'Export' }} />
