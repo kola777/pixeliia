@@ -19,22 +19,39 @@ export type Project = {
   createdAt: number;
 };
 
+export type LedgerEntry = {
+  id: string;
+  label: string;
+  /** Negative = spent, positive = granted. */
+  delta: number;
+  createdAt: number;
+};
+
 type EditorContextValue = {
   photoUri: string | null;
   resultUri: string | null;
   intensity: number;
   projects: Project[];
   hydrated: boolean;
+  balance: number;
+  ledger: LedgerEntry[];
   setPhoto: (uri: string) => void;
   setResult: (uri: string | null) => void;
   setIntensity: (value: number) => void;
   saveProject: (toolId: string, toolName: string) => void;
   openProject: (id: string) => void;
+  /** Deducts ESPEE and records the purchase. Returns false when funds are short. */
+  spend: (amount: number, label: string) => boolean;
+  /** Clearly-labeled test grant until real billing lands. */
+  grantTestEspee: () => void;
 };
 
 const PROJECTS_KEY = 'pixeliia:projects:v1';
 const PHOTO_KEY = 'pixeliia:photo:v1';
+const WALLET_KEY = 'pixeliia:wallet:v1';
 const MAX_PROJECTS = 30;
+const WELCOME_GRANT = 5;
+const TEST_GRANT = 10;
 
 const EditorContext = createContext<EditorContextValue | null>(null);
 
@@ -43,6 +60,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [resultUri, setResultUri] = useState<string | null>(null);
   const [intensity, setIntensity] = useState(50);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [balance, setBalance] = useState(WELCOME_GRANT);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const hydratedRef = useRef(false);
 
@@ -50,9 +69,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     async function load() {
       try {
-        const [storedProjects, storedPhoto] = await Promise.all([
+        const [storedProjects, storedPhoto, storedWallet] = await Promise.all([
           AsyncStorage.getItem(PROJECTS_KEY),
           AsyncStorage.getItem(PHOTO_KEY),
+          AsyncStorage.getItem(WALLET_KEY),
         ]);
         if (cancelled) return;
         if (storedProjects) {
@@ -74,6 +94,27 @@ export function EditorProvider({ children }: { children: ReactNode }) {
               setIntensity(parsed.intensity);
             }
           }
+        }
+        if (storedWallet) {
+          const parsed = JSON.parse(storedWallet) as {
+            balance: number;
+            ledger: LedgerEntry[];
+          };
+          if (typeof parsed?.balance === 'number') {
+            setBalance(parsed.balance);
+          }
+          if (Array.isArray(parsed?.ledger)) {
+            setLedger(parsed.ledger.slice(0, 50));
+          }
+        } else {
+          setLedger([
+            {
+              id: `welcome-${Date.now()}`,
+              label: 'Welcome grant',
+              delta: WELCOME_GRANT,
+              createdAt: Date.now(),
+            },
+          ]);
         }
       } catch {
         // Corrupt or unavailable storage: start fresh rather than crash.
@@ -103,6 +144,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       () => {}
     );
   }, [projects]);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    AsyncStorage.setItem(WALLET_KEY, JSON.stringify({ balance, ledger: ledger.slice(0, 50) })).catch(
+      () => {}
+    );
+  }, [balance, ledger]);
 
   const setPhoto = useCallback((uri: string) => {
     setPhotoUri(uri);
@@ -142,6 +190,32 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     [projects]
   );
 
+  const spend = useCallback(
+    (amount: number, label: string) => {
+      if (amount <= 0) return true;
+      if (balance < amount) return false;
+      setBalance(balance - amount);
+      setLedger((current) =>
+        [{ id: `${Date.now()}`, label, delta: -amount, createdAt: Date.now() }, ...current].slice(
+          0,
+          50
+        )
+      );
+      return true;
+    },
+    [balance]
+  );
+
+  const grantTestEspee = useCallback(() => {
+    setBalance((current) => current + TEST_GRANT);
+    setLedger((current) =>
+      [
+        { id: `${Date.now()}`, label: 'Test top-up (not real billing)', delta: TEST_GRANT, createdAt: Date.now() },
+        ...current,
+      ].slice(0, 50)
+    );
+  }, []);
+
   const value = useMemo(
     () => ({
       photoUri,
@@ -149,11 +223,15 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       intensity,
       projects,
       hydrated,
+      balance,
+      ledger,
       setPhoto,
       setResult,
       setIntensity,
       saveProject,
       openProject,
+      spend,
+      grantTestEspee,
     }),
     [
       photoUri,
@@ -161,10 +239,14 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       intensity,
       projects,
       hydrated,
+      balance,
+      ledger,
       setPhoto,
       setResult,
       saveProject,
       openProject,
+      spend,
+      grantTestEspee,
     ]
   );
 

@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AdSlot } from '@/components/AdSlot';
 import { AppScreen } from '@/components/AppScreen';
 import { colors, radius, space } from '@/constants/theme';
+import { useEditor } from '@/context/EditorContext';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 const ROWS = [
@@ -13,6 +14,7 @@ const ROWS = [
 ];
 
 export default function ProfileScreen() {
+  const { balance, ledger } = useEditor();
   const rows = [
     ROWS[0],
     {
@@ -21,7 +23,11 @@ export default function ProfileScreen() {
         ? 'Connected. Edits run on the AI backend.'
         : 'Not connected yet. The app runs in local preview mode.',
     },
-    ...ROWS.slice(1),
+    {
+      title: 'Purchases',
+      body: `Balance: ${balance} ESPEE. Export purchases appear below.`,
+    },
+    ...ROWS.slice(2),
   ];
   return (
     <AppScreen>
@@ -33,6 +39,17 @@ export default function ProfileScreen() {
             <Text style={styles.body}>{row.body}</Text>
           </View>
         ))}
+        {ledger.length > 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.title}>Recent activity</Text>
+            {ledger.slice(0, 5).map((entry) => (
+              <Text key={entry.id} style={styles.body}>
+                {entry.label} ({entry.delta > 0 ? '+' : ''}
+                {entry.delta} ESPEE)
+              </Text>
+            ))}
+          </View>
+        ) : null}
         <AdSlot />
       </ScrollView>
     </AppScreen>

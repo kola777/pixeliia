@@ -4,6 +4,8 @@ export type ExportOption = {
   priceLabel: string;
   hint: string;
   mvp: boolean;
+  /** Price in ESPEE actually charged by the ledger. 0 = free. */
+  cost: number;
 };
 
 export const EXPORT_OPTIONS: ExportOption[] = [
@@ -13,6 +15,7 @@ export const EXPORT_OPTIONS: ExportOption[] = [
     priceLabel: 'Free',
     hint: 'Includes the Pixeliia watermark',
     mvp: true,
+    cost: 0,
   },
   {
     id: 'hd',
@@ -20,6 +23,7 @@ export const EXPORT_OPTIONS: ExportOption[] = [
     priceLabel: '2 ESPEE',
     hint: 'Higher-resolution export',
     mvp: true,
+    cost: 2,
   },
   {
     id: 'remove-pixeliia-watermark',
@@ -27,6 +31,7 @@ export const EXPORT_OPTIONS: ExportOption[] = [
     priceLabel: '1 ESPEE',
     hint: 'Clean export without the Pixeliia mark',
     mvp: true,
+    cost: 1,
   },
   {
     id: 'phone-watermark',
@@ -34,6 +39,7 @@ export const EXPORT_OPTIONS: ExportOption[] = [
     priceLabel: '1 ESPEE',
     hint: 'Coming in a later release',
     mvp: false,
+    cost: 1,
   },
   {
     id: 'remove-external-watermark',
@@ -41,5 +47,6 @@ export const EXPORT_OPTIONS: ExportOption[] = [
     priceLabel: '3 ESPEE',
     hint: 'Coming in a later release · for photos you own',
     mvp: false,
+    cost: 3,
   },
 ];
