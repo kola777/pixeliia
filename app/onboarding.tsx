@@ -6,6 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '@/components/AppScreen';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors, space } from '@/constants/theme';
+import { track } from '@/lib/analytics';
 
 const ONBOARDED_KEY = 'pixeliia:onboarded:v1';
 
@@ -34,6 +35,7 @@ export default function OnboardingScreen() {
     } catch {
       // Storage unavailable: still let the user continue.
     }
+    track('onboarding_completed');
     router.replace('/(tabs)');
   }
 

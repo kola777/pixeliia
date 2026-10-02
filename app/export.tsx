@@ -19,6 +19,7 @@ import { EXPORT_OPTIONS } from '@/constants/exportOptions';
 import { colors, radius, space } from '@/constants/theme';
 import { toolById } from '@/constants/tools';
 import { useEditor } from '@/context/EditorContext';
+import { track } from '@/lib/analytics';
 
 const PREVIEW_HEIGHT = 360;
 const HD_MAX_EDGE = 2048;
@@ -103,6 +104,7 @@ export default function ExportScreen() {
         watermarked = false;
       }
       await saveFile(fileUri);
+      track('export_completed', { option: 'standard', paid: false, watermarked });
       finishExport(
         watermarked
           ? 'Standard download is free and includes the Pixeliia watermark.'
@@ -139,6 +141,7 @@ export default function ExportScreen() {
         height: target.height,
       });
       await saveFile(fileUri);
+      track('export_completed', { option: 'hd', paid: true, cost: 2 });
       finishExport(`HD download (${target.width}×${target.height}) with Pixeliia watermark. 2 ESPEE charged.`);
     } catch (err) {
       Alert.alert(
@@ -165,6 +168,7 @@ export default function ExportScreen() {
     try {
       if (!(await ensureGalleryPermission())) return;
       await saveFile(sourceUri);
+      track('export_completed', { option: 'remove-watermark', paid: true, cost: 1 });
       finishExport('Clean export without the Pixeliia mark. 1 ESPEE charged.');
     } catch {
       Alert.alert('Save failed', 'Could not save to the gallery. Try again.');

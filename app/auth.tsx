@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '@/components/AppScreen';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors, radius, space } from '@/constants/theme';
+import { track } from '@/lib/analytics';
 import { isSupabaseConfigured, upgradeWithEmail } from '@/lib/supabase';
 
 export default function AuthScreen() {
@@ -26,6 +27,7 @@ export default function AuthScreen() {
       if (needsConfirmation) {
         setNotice('Account created. Check your inbox to confirm your email, then sign in.');
       } else {
+        track('account_upgraded', { mode });
         router.replace('/(tabs)/profile');
       }
     } catch (err) {

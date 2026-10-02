@@ -2,6 +2,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Alert } from 'react-native';
 
+import { track } from './analytics';
+
 /**
  * Re-encode the picked photo as compressed JPEG so uploads stay lightweight
  * (PRD performance requirement). Falls back to the original URI on failure.
@@ -37,6 +39,7 @@ export async function pickPhotoFromLibrary() {
     return null;
   }
 
+  track('photo_selected', { source: 'library' });
   return compressPickedPhoto(result.assets[0].uri);
 }
 
@@ -56,5 +59,6 @@ export async function takePhotoWithCamera() {
     return null;
   }
 
+  track('photo_selected', { source: 'camera' });
   return compressPickedPhoto(result.assets[0].uri);
 }

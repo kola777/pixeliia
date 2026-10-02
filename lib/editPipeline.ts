@@ -1,6 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { track } from './analytics';
 import { ensureSignedIn, getSupabase, isSupabaseConfigured } from './supabase';
 
 /**
@@ -116,9 +117,24 @@ export async function runEdit(
   intensity: number,
   params: EditParams = {}
 ): Promise<string> {
-  if (!isSupabaseConfigured()) {
-    await delay(900);
-    return photoUri;
+  const backend = isSupabaseConfigured();
+  const startedAt = Date.now();
+  try {
+    const output = backend
+      ? await runBackendEdit(photoUri, toolId, intensity, params)
+      : await delay(900).then(() => photoUri);
+    track('edit_succeeded', {
+      tool: toolId,
+      mode: backend ? 'backend' : 'local',
+      ms: Date.now() - startedAt,
+    });
+    return output;
+  } catch (err) {
+    track('edit_failed', {
+      tool: toolId,
+      mode: backend ? 'backend' : 'local',
+      reason: err instanceof Error ? err.message.slice(0, 120) : 'unknown',
+    });
+    throw err;
   }
-  return runBackendEdit(photoUri, toolId, intensity, params);
 }
