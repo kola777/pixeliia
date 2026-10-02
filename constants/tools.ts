@@ -4,6 +4,7 @@ export type ToolCategoryId =
   | 'face'
   | 'body'
   | 'age'
+  | 'studio'
   | 'outfit'
   | 'camera'
   | 'background'
@@ -15,6 +16,10 @@ export type Tool = {
   category: ToolCategoryId;
   description: string;
   intensity: boolean;
+  /** One-tap choices rendered as chips; sent to the backend as params.variant. */
+  variants?: string[];
+  /** Shown on results that materially alter the photo (PRD guardrails). */
+  aiNotice?: string;
 };
 
 export const CATEGORIES: { id: ToolCategoryId; name: string; blurb: string }[] = [
@@ -23,6 +28,7 @@ export const CATEGORIES: { id: ToolCategoryId; name: string; blurb: string }[] =
   { id: 'face', name: 'Face & Skin', blurb: 'Texture-preserving retouch' },
   { id: 'body', name: 'Body', blurb: 'Subtle proportion tools' },
   { id: 'age', name: 'Age', blurb: 'Reimagine age, identity preserved' },
+  { id: 'studio', name: 'Appearance Studio', blurb: 'Hair, makeup and style looks' },
   { id: 'outfit', name: 'Outfit', blurb: 'Color, style, replace clothing' },
   { id: 'camera', name: 'Camera Look', blurb: 'Phone-camera style simulation' },
   { id: 'background', name: 'Background', blurb: 'Remove, blur, replace' },
@@ -141,6 +147,43 @@ export const TOOLS: Tool[] = [
     category: 'age',
     description: 'Reimagine the person at any age. Clearly labeled as an AI edit.',
     intensity: false,
+    aiNotice: 'AI age transformation — a generated edit, not a real photo of this age.',
+  },
+  {
+    id: 'hair-color',
+    name: 'Hair Color',
+    category: 'studio',
+    description: 'Recolor hair while keeping style, texture and identity.',
+    intensity: false,
+    variants: ['Jet Black', 'Chestnut', 'Auburn', 'Honey Blonde', 'Platinum', 'Burgundy'],
+    aiNotice: 'AI appearance edit — a generated look, clearly labeled.',
+  },
+  {
+    id: 'makeup-look',
+    name: 'Makeup Look',
+    category: 'studio',
+    description: 'Apply a makeup look while keeping the face natural and recognizable.',
+    intensity: false,
+    variants: ['Natural Glow', 'Soft Glam', 'Bold Lips', 'Smoky Eyes'],
+    aiNotice: 'AI appearance edit — a generated look, clearly labeled.',
+  },
+  {
+    id: 'facial-hair',
+    name: 'Facial Hair',
+    category: 'studio',
+    description: 'Try facial-hair styles with realistic blending.',
+    intensity: false,
+    variants: ['Light Stubble', 'Full Beard', 'Mustache', 'Clean Shaven'],
+    aiNotice: 'AI appearance edit — a generated look, clearly labeled.',
+  },
+  {
+    id: 'style-preset',
+    name: 'Style Preset',
+    category: 'studio',
+    description: 'Restyle the overall fashion look, keep the person recognizable.',
+    intensity: false,
+    variants: ['Casual', 'Formal', 'Streetwear', 'Vintage'],
+    aiNotice: 'AI appearance edit — a generated look, clearly labeled.',
   },
   {
     id: 'outfit-color',

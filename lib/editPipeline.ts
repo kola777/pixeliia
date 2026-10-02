@@ -41,6 +41,8 @@ async function downloadResultToCache(
 export type EditParams = {
   /** Target age for the age-transform tool (0-100). */
   age?: number;
+  /** Selected one-tap variant for studio tools (e.g. "Auburn"). */
+  variant?: string;
 };
 
 async function runBackendEdit(

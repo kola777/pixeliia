@@ -47,7 +47,7 @@ type JobRow = {
   source_path: string;
   status: string;
   user_id: string | null;
-  params: { age?: number } | null;
+  params: { age?: number; variant?: string } | null;
 };
 
 // One-click tools become short natural-language instructions. Intensity is
@@ -85,10 +85,17 @@ const INTENSITY_WORDS: Array<[number, string]> = [
   [0, "very subtly"],
 ];
 
+const STUDIO_BASE: Record<string, string> = {
+  "hair-color": "Change only the hair color",
+  "makeup-look": "Apply a makeup look",
+  "facial-hair": "Adjust the facial hair",
+  "style-preset": "Restyle the overall fashion look",
+};
+
 function promptFor(
   toolId: string,
   intensity: number,
-  params: { age?: number } | null,
+  params: { age?: number; variant?: string } | null,
 ): string {
   if (toolId === "age-edit") {
     const target = Math.min(100, Math.max(0, Math.round(params?.age ?? 30)));
@@ -103,6 +110,13 @@ function promptFor(
               ? `a ${target}-year-old adult`
               : `a ${target}-year-old senior`;
     return `Reimagine the person in this photo as ${stage}, keeping their identity, pose, clothing, lighting and background recognizable. Natural skin texture appropriate for that age, no plastic smoothing, no warped shapes, no fake lighting.`;
+  }
+  const studioBase = STUDIO_BASE[toolId];
+  if (studioBase) {
+    const rawVariant = params?.variant;
+    const variant = typeof rawVariant === "string" ? rawVariant.trim().slice(0, 40) : "";
+    const look = variant ? ` (${variant})` : "";
+    return `${studioBase}${look}, keeping the person recognizable: same face, identity, pose and background. Realistic blending, natural texture, no plastic skin, no distortion.`;
   }
   const base =
     TOOL_PROMPTS[toolId] ?? "Improve this photo while keeping it natural";

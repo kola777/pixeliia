@@ -35,17 +35,30 @@ export default function EditorScreen() {
   const [showAfter, setShowAfter] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [age, setAge] = useState(30);
+  const [variant, setVariant] = useState<string | null>(null);
   const lastRunKey = useRef<string | null>(null);
   const isAgeTool = tool?.id === 'age-edit';
+  const variants = tool?.variants ?? [];
+  const selectedVariant = variant ?? variants[0] ?? '';
+
+  function currentParams(): EditParams {
+    return {
+      ...(isAgeTool ? { age } : {}),
+      ...(selectedVariant ? { variant: selectedVariant } : {}),
+    };
+  }
+
+  function currentKey(uri: string) {
+    return `${tool?.id ?? 'missing'}:${uri}:${intensity}:${isAgeTool ? age : ''}:${selectedVariant}`;
+  }
 
   async function applyEdit() {
     if (!photoUri || !tool || busy) return;
-    const params: EditParams = tool.id === 'age-edit' ? { age } : {};
-    lastRunKey.current = `${tool.id}:${photoUri}:${intensity}:${tool.id === 'age-edit' ? age : ''}`;
+    lastRunKey.current = currentKey(photoUri);
     setBusy(true);
     setError(null);
     try {
-      const output = await runEdit(photoUri, tool.id, intensity, params);
+      const output = await runEdit(photoUri, tool.id, intensity, currentParams());
       setResult(output);
       setShowAfter(true);
     } catch {
@@ -59,8 +72,13 @@ export default function EditorScreen() {
     const sourceUri = photoUri;
     const activeTool = tool;
     if (!sourceUri || resultUri || !activeTool || busy) return;
-    const targetAge = activeTool.id === 'age-edit' ? age : '';
-    const key = `${activeTool.id}:${sourceUri}:${intensity}:${targetAge}`;
+    const params: EditParams = {
+      ...(activeTool.id === 'age-edit' ? { age } : {}),
+      ...((activeTool.variants ?? []).length && (variant ?? activeTool.variants?.[0])
+        ? { variant: (variant ?? activeTool.variants?.[0]) as string }
+        : {}),
+    };
+    const key = `${activeTool.id}:${sourceUri}:${intensity}:${activeTool.id === 'age-edit' ? age : ''}:${params.variant ?? ''}`;
     if (lastRunKey.current === key) return;
     lastRunKey.current = key;
     let cancelled = false;
@@ -80,11 +98,11 @@ export default function EditorScreen() {
       }
     }
 
-    run(sourceUri, activeTool.id, intensity, activeTool.id === 'age-edit' ? { age } : {});
+    run(sourceUri, activeTool.id, intensity, params);
     return () => {
       cancelled = true;
     };
-  }, [photoUri, resultUri, tool, intensity, age, busy, setResult]);
+  }, [photoUri, resultUri, tool, intensity, age, variant, busy, setResult]);
 
   async function choosePhoto() {
     const uri = await pickPhotoFromLibrary();
@@ -96,7 +114,7 @@ export default function EditorScreen() {
 
   function resetToOriginal() {
     if (!photoUri || !tool || busy) return;
-    lastRunKey.current = `${tool.id}:${photoUri}:${intensity}:${tool.id === 'age-edit' ? age : ''}`;
+    lastRunKey.current = currentKey(photoUri);
     setResult(null);
     setShowAfter(false);
     setError(null);
@@ -190,10 +208,8 @@ export default function EditorScreen() {
               accessibilityRole="button">
               <Text style={styles.reapplyLabel}>Reset to original</Text>
             </Pressable>
-            {isAgeTool && showAfter ? (
-              <Text style={styles.aiLabel}>
-                AI age transformation — a generated edit, not a real photo of this age.
-              </Text>
+            {tool.aiNotice && resultUri && showAfter ? (
+              <Text style={styles.aiLabel}>{tool.aiNotice}</Text>
             ) : null}
           </View>
         ) : null}
@@ -271,6 +287,38 @@ export default function EditorScreen() {
               style={styles.reapply}
               accessibilityRole="button">
               <Text style={styles.reapplyLabel}>Show age {age}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {variants.length > 0 && photoUri ? (
+          <View>
+            <Text style={styles.section}>Look</Text>
+            <View style={styles.presetRow}>
+              {variants.map((option) => (
+                <Pressable
+                  key={option}
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => setVariant(option)}
+                  style={[
+                    styles.preset,
+                    selectedVariant === option && styles.toggleOn,
+                    busy && styles.disabled,
+                  ]}>
+                  <Text
+                    style={[styles.toggleLabel, selectedVariant === option && styles.toggleLabelOn]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              onPress={applyEdit}
+              disabled={busy}
+              style={styles.reapply}
+              accessibilityRole="button">
+              <Text style={styles.reapplyLabel}>Apply{selectedVariant ? ` ${selectedVariant}` : ''}</Text>
             </Pressable>
           </View>
         ) : null}
