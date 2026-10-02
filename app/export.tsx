@@ -1,5 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Asset, requestPermissionsAsync } from 'expo-media-library';
 
 import { AppScreen } from '@/components/AppScreen';
 import { EXPORT_OPTIONS } from '@/constants/exportOptions';
@@ -11,27 +13,55 @@ export default function ExportScreen() {
   const router = useRouter();
   const { toolId } = useLocalSearchParams<{ toolId?: string }>();
   const tool = toolById(toolId ?? '');
-  const { photoUri, saveProject } = useEditor();
+  const { photoUri, resultUri, saveProject } = useEditor();
+  const [busy, setBusy] = useState(false);
 
-  function choose(optionId: string, enabled: boolean) {
+  async function choose(optionId: string, enabled: boolean) {
+    if (busy) return;
     if (!enabled) {
       Alert.alert('Coming later', 'This export option is planned for a later release.');
       return;
     }
-    if (!photoUri) {
+    const sourceUri = resultUri ?? photoUri;
+    if (!sourceUri) {
       Alert.alert('No photo', 'Select a photo before exporting.');
       return;
     }
-    if (tool) {
-      saveProject(tool.id, tool.name);
+    if (optionId !== 'standard') {
+      if (tool) {
+        saveProject(tool.id, tool.name);
+      }
+      Alert.alert(
+        'Saved to My Photos',
+        'Purchase flow will use ESPEE once billing is connected.'
+      );
+      router.push('/(tabs)/photos');
+      return;
     }
-    Alert.alert(
-      'Saved to My Photos',
-      optionId === 'standard'
-        ? 'Standard download is free and includes the Pixeliia watermark.'
-        : 'Purchase flow will use ESPEE once billing is connected.'
-    );
-    router.push('/(tabs)/photos');
+    setBusy(true);
+    try {
+      const permission = await requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Gallery access needed',
+          'Allow gallery access to save your exported photo.'
+        );
+        return;
+      }
+      await Asset.create(sourceUri);
+      if (tool) {
+        saveProject(tool.id, tool.name);
+      }
+      Alert.alert(
+        'Saved',
+        'Standard download is free and includes the Pixeliia watermark. Saved to your gallery and My Photos.'
+      );
+      router.push('/(tabs)/photos');
+    } catch {
+      Alert.alert('Save failed', 'Could not save to the gallery. Try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

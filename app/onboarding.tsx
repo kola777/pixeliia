@@ -1,9 +1,13 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AppScreen } from '@/components/AppScreen';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors, space } from '@/constants/theme';
+
+const ONBOARDED_KEY = 'pixeliia:onboarded:v1';
 
 const POINTS = [
   'Tap a tool. No prompt writing.',
@@ -13,6 +17,25 @@ const POINTS = [
 
 export default function OnboardingScreen() {
   const router = useRouter();
+
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDED_KEY)
+      .then((seen) => {
+        if (seen === '1') {
+          router.replace('/(tabs)');
+        }
+      })
+      .catch(() => {});
+  }, [router]);
+
+  async function getStarted() {
+    try {
+      await AsyncStorage.setItem(ONBOARDED_KEY, '1');
+    } catch {
+      // Storage unavailable: still let the user continue.
+    }
+    router.replace('/(tabs)');
+  }
 
   return (
     <AppScreen>
@@ -26,7 +49,7 @@ export default function OnboardingScreen() {
             </Text>
           ))}
         </View>
-        <PrimaryButton label="Get started" onPress={() => router.replace('/(tabs)')} />
+        <PrimaryButton label="Get started" onPress={getStarted} />
       </View>
     </AppScreen>
   );

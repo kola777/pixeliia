@@ -8,7 +8,7 @@ import { useEditor } from '@/context/EditorContext';
 
 export default function PhotosScreen() {
   const router = useRouter();
-  const { projects } = useEditor();
+  const { projects, openProject } = useEditor();
 
   return (
     <AppScreen>
@@ -29,9 +29,10 @@ export default function PhotosScreen() {
             {projects.map((project) => (
               <Pressable
                 key={project.id}
-                onPress={() =>
-                  router.push({ pathname: '/editor/[toolId]', params: { toolId: project.toolId } })
-                }
+                onPress={() => {
+                  openProject(project.id);
+                  router.push({ pathname: '/editor/[toolId]', params: { toolId: project.toolId } });
+                }}
                 style={styles.card}>
                 <Image source={{ uri: project.resultUri }} style={styles.thumb} />
                 <Text style={styles.cardTitle}>{project.toolName}</Text>
