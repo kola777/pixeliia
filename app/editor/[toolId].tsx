@@ -18,6 +18,7 @@ import Slider from '@react-native-community/slider';
 import { AGE_PRESETS, toolById } from '@/constants/tools';
 import { useEditor } from '@/context/EditorContext';
 import { runEdit, type EditParams } from '@/lib/editPipeline';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { pickPhotoFromLibrary } from '@/lib/pickPhoto';
 
 const INTENSITY = [
@@ -324,8 +325,9 @@ export default function EditorScreen() {
         ) : null}
 
         <Text style={styles.note}>
-          AI backend is not connected yet. This preview keeps your original photo so the flow can be
-          tested.
+          {isSupabaseConfigured()
+            ? 'Edits run on the AI backend. Results are labeled whenever AI alters the photo.'
+            : 'AI backend is not connected yet. This preview keeps your original photo so the flow can be tested.'}
         </Text>
 
         <PrimaryButton

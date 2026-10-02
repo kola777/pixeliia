@@ -29,6 +29,8 @@ export default function PhotosScreen() {
             {projects.map((project) => (
               <Pressable
                 key={project.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Reopen ${project.toolName} edit`}
                 onPress={() => {
                   openProject(project.id);
                   router.push({ pathname: '/editor/[toolId]', params: { toolId: project.toolId } });

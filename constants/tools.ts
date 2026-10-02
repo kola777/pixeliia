@@ -126,6 +126,7 @@ export const TOOLS: Tool[] = [
     category: 'body',
     description: 'Subtle slimming that avoids obvious warping.',
     intensity: true,
+    aiNotice: 'AI body edit — proportions were subtly altered in this generated edit.',
   },
   {
     id: 'more-athletic',
@@ -133,6 +134,7 @@ export const TOOLS: Tool[] = [
     category: 'body',
     description: 'A slightly more athletic build while keeping pose and clothes.',
     intensity: true,
+    aiNotice: 'AI body edit — proportions were subtly altered in this generated edit.',
   },
   {
     id: 'adjust-waist',
@@ -140,6 +142,7 @@ export const TOOLS: Tool[] = [
     category: 'body',
     description: 'Targeted waist adjustment with identity preserved.',
     intensity: true,
+    aiNotice: 'AI body edit — proportions were subtly altered in this generated edit.',
   },
   {
     id: 'age-edit',
@@ -191,6 +194,7 @@ export const TOOLS: Tool[] = [
     category: 'outfit',
     description: 'Recolor clothing while keeping the garment shape.',
     intensity: false,
+    aiNotice: 'AI outfit edit — clothing was changed in this generated edit.',
   },
   {
     id: 'outfit-style',
@@ -198,6 +202,7 @@ export const TOOLS: Tool[] = [
     category: 'outfit',
     description: 'Shift the style of the existing outfit.',
     intensity: false,
+    aiNotice: 'AI outfit edit — clothing was changed in this generated edit.',
   },
   {
     id: 'replace-clothing',
@@ -205,6 +210,7 @@ export const TOOLS: Tool[] = [
     category: 'outfit',
     description: 'Replace selected clothing with a new outfit.',
     intensity: false,
+    aiNotice: 'AI outfit edit — clothing was changed in this generated edit.',
   },
   {
     id: 'iphone-look',
@@ -233,6 +239,7 @@ export const TOOLS: Tool[] = [
     category: 'background',
     description: 'Cut the subject out of the current background.',
     intensity: false,
+    aiNotice: 'AI edit — parts of this photo were generated.',
   },
   {
     id: 'blur-background',
@@ -245,8 +252,9 @@ export const TOOLS: Tool[] = [
     id: 'remove-object',
     name: 'Remove Object',
     category: 'cleanup',
-    description: 'Remove an unwanted object or distraction.',
+    description: 'Remove an unwanted object or distraction. Only edit photos you own or may edit.',
     intensity: false,
+    aiNotice: 'AI edit — parts of this photo were generated.',
   },
 ];
 

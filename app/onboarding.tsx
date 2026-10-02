@@ -14,6 +14,7 @@ const POINTS = [
   'Tap a tool. No prompt writing.',
   'Edits stay natural and identity-preserving.',
   'Free editing. Ads never interrupt.',
+  'Standard export is free with a small watermark. HD and clean exports use ESPEE.',
 ];
 
 export default function OnboardingScreen() {

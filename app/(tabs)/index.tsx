@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AdSlot } from '@/components/AdSlot';
 import { AppScreen } from '@/components/AppScreen';
@@ -49,12 +49,17 @@ export default function HomeScreen() {
           projects.slice(0, 3).map((project) => (
             <Pressable
               key={project.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Reopen ${project.toolName} edit`}
               onPress={() =>
                 router.push({ pathname: '/editor/[toolId]', params: { toolId: project.toolId } })
               }
               style={styles.recent}>
-              <Text style={styles.recentTitle}>{project.toolName}</Text>
-              <Text style={styles.recentBody}>Saved locally on this device</Text>
+              <Image source={{ uri: project.resultUri }} style={styles.recentThumb} />
+              <View style={styles.recentTexts}>
+                <Text style={styles.recentTitle}>{project.toolName}</Text>
+                <Text style={styles.recentBody}>Saved locally on this device</Text>
+              </View>
             </Pressable>
           ))
         )}
@@ -119,6 +124,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
+  recentThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: colors.border,
+  },
+  recentTexts: {
+    flex: 1,
   },
   recentTitle: {
     fontWeight: '700',

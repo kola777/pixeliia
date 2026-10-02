@@ -199,6 +199,19 @@ export default function ExportScreen() {
         </Text>
         <Text style={styles.balance}>Balance: {balance} ESPEE</Text>
 
+        {!sourceUri ? (
+          <View style={styles.card}>
+            <Text style={styles.name}>No photo yet</Text>
+            <Text style={styles.hint}>Choose a photo first, then come back to export it.</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/(tabs)/edit')}
+              style={styles.link}>
+              <Text style={styles.linkLabel}>Choose a photo</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {sourceUri ? (
           <WatermarkedPhoto
             uri={sourceUri}
@@ -284,5 +297,13 @@ const styles = StyleSheet.create({
   hint: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  link: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  linkLabel: {
+    color: colors.accent,
+    fontWeight: '700',
   },
 });
