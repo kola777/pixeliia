@@ -75,3 +75,35 @@ export function getSupabase(): SupabaseClient | null {
   }
   return client;
 }
+
+/**
+ * Returns the current user id, signing in anonymously on first launch so
+ * every device owns its jobs without any sign-up friction. Returns null when
+ * the backend is not configured or sign-in fails — callers must stay in
+ * local mode in that case.
+ */
+export async function ensureSignedIn(): Promise<string | null> {
+  const client = getSupabase();
+  if (!client) return null;
+  try {
+    const { data: sessionData } = await client.auth.getSession();
+    if (sessionData.session?.user) return sessionData.session.user.id;
+    const { data, error } = await client.auth.signInAnonymously();
+    if (error || !data.user) return null;
+    return data.user.id;
+  } catch {
+    return null;
+  }
+}
+
+/** Current user id without triggering a sign-in (for display only). */
+export async function getCurrentUserId(): Promise<string | null> {
+  const client = getSupabase();
+  if (!client) return null;
+  try {
+    const { data } = await client.auth.getUser();
+    return data.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}

@@ -10,9 +10,11 @@
 //             REPLICATE_EDIT_MODEL=black-forest-labs/flux-kontext-pro \
 //             REPLICATE_UPSCALE_MODEL=nightmareai/real-esrgan \
 //             REPLICATE_BG_MODEL=cjwbw/rembg
-// Invoke auth: verify_jwt is false in supabase/config.toml so the anonymous
-// app can trigger its own jobs; the function only ever processes rows still
-// in `queued` state and the Replicate token never leaves the server.
+// Invoke auth: verify_jwt is true in supabase/config.toml and the function
+// additionally loads the job through the caller's own JWT, so row-level
+// security limits every caller to their own jobs. Service-role access is
+// used only for status updates and result storage; the Replicate token
+// never leaves the server.
 //
 // Model slugs and input keys below are best-known defaults. Before first
 // production use, open each model's API tab on replicate.com and confirm the
@@ -23,6 +25,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const REPLICATE_TOKEN = Deno.env.get("REPLICATE_API_TOKEN") ?? "";
 const EDIT_MODEL =
   Deno.env.get("REPLICATE_EDIT_MODEL") ?? "black-forest-labs/flux-kontext-pro";
@@ -43,6 +46,7 @@ type JobRow = {
   intensity: number;
   source_path: string;
   status: string;
+  user_id: string | null;
 };
 
 // One-click tools become short natural-language instructions. Intensity is
@@ -173,7 +177,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return Response.json({ ok: false, error: "POST with { jobId } required." }, { status: 405 });
   }
-  if (!SUPABASE_URL || !SERVICE_KEY) {
+  if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) {
     return Response.json({ ok: false, error: "Worker misconfigured (Supabase env)." }, { status: 500 });
   }
   if (!REPLICATE_TOKEN) {
@@ -193,21 +197,44 @@ Deno.serve(async (req) => {
     return Response.json({ ok: false, error: "jobId required." }, { status: 400 });
   }
 
+  // Identify the caller through their own JWT. Never fail-mark another
+  // caller's row: auth failures return before touching any job state.
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7) : "";
+  if (!token) {
+    return Response.json({ ok: false, error: "Sign-in required." }, { status: 401 });
+  }
+  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data: userData, error: userError } = await userClient.auth.getUser();
+  if (userError || !userData.user) {
+    return Response.json({ ok: false, error: "Sign-in required." }, { status: 401 });
+  }
+  const callerId = userData.user.id;
+
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
   const fail = async (message: string) => {
     await supabase.from("edit_jobs").update({ status: "failed", error: message }).eq("id", jobId);
     return Response.json({ ok: false, error: message });
   };
 
-  const { data: job, error: jobError } = await supabase
+  // Owner-scoped read: RLS only returns this caller's own rows.
+  const { data: job, error: jobError } = await userClient
     .from("edit_jobs")
-    .select("id,tool_id,intensity,source_path,status")
+    .select("id,tool_id,intensity,source_path,status,user_id")
     .eq("id", jobId)
     .single();
-  if (jobError || !job) return await fail("Edit job not found.");
+  if (jobError || !job) {
+    return Response.json({ ok: false, error: "Edit job not found." }, { status: 404 });
+  }
   const row = job as JobRow;
+  if (row.user_id && row.user_id !== callerId) {
+    return Response.json({ ok: false, error: "Not your edit job." }, { status: 403 });
+  }
   if (row.status === "succeeded") {
-    const { data: done } = await supabase
+    const { data: done } = await userClient
       .from("edit_jobs")
       .select("result_path")
       .eq("id", jobId)
@@ -248,7 +275,8 @@ Deno.serve(async (req) => {
     const bytes = new Uint8Array(await outputRes.arrayBuffer());
     const contentType = outputRes.headers.get("content-type") ?? "image/png";
     const extension = contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg" : "png";
-    const resultPath = `results/${jobId}.${extension}`;
+    const ownerId = row.user_id ?? callerId;
+    const resultPath = `results/${ownerId}/${jobId}.${extension}`;
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(resultPath, bytes, {
       contentType,
       upsert: true,

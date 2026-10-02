@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { EditorProvider } from '@/context/EditorContext';
 import { colors } from '@/constants/theme';
+import { ensureSignedIn } from '@/lib/supabase';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -18,6 +19,8 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
+    // Anonymous identity for owned backend jobs; silent no-op in local mode.
+    void ensureSignedIn().catch(() => {});
   }, []);
 
   return (

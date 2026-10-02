@@ -1,10 +1,12 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useEffect, useState } from 'react';
+
 import { AdSlot } from '@/components/AdSlot';
 import { AppScreen } from '@/components/AppScreen';
 import { colors, radius, space } from '@/constants/theme';
 import { useEditor } from '@/context/EditorContext';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { getCurrentUserId, isSupabaseConfigured } from '@/lib/supabase';
 
 const ROWS = [
   { title: 'Account', body: 'Sign-in arrives with Supabase in the next pass.' },
@@ -15,8 +17,23 @@ const ROWS = [
 
 export default function ProfileScreen() {
   const { balance, ledger } = useEditor();
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getCurrentUserId()
+      .then(setUserId)
+      .catch(() => {});
+  }, []);
+
   const rows = [
-    ROWS[0],
+    {
+      title: 'Account',
+      body: isSupabaseConfigured()
+        ? userId
+          ? `Guest account ${userId.slice(0, 8)}. Jobs and photos stay private to this device.`
+          : 'Signing in…'
+        : 'Local mode. Sign-in activates with the Supabase backend.',
+    },
     {
       title: 'Backend',
       body: isSupabaseConfigured()

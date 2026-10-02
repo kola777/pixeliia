@@ -1,6 +1,6 @@
 # Pixeliia Supabase config.
-# The mobile app invokes process-edit-job anonymously for its own queued
-# jobs; the function only processes rows still in `queued` state and the
-# Replicate token stays server-side.
+# The app invokes process-edit-job with the caller's session JWT; the
+# gateway validates it and the function additionally scopes every job read
+# through RLS. The Replicate token stays server-side.
 [functions.process-edit-job]
-verify_jwt = false
+verify_jwt = true

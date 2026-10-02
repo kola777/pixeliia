@@ -1,7 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { getSupabase, isSupabaseConfigured } from './supabase';
+import { ensureSignedIn, getSupabase, isSupabaseConfigured } from './supabase';
 
 /**
  * Edit pipeline.
@@ -47,9 +47,13 @@ async function runBackendEdit(
   if (!supabase) {
     throw new Error('Photo backend is not configured yet.');
   }
+  const userId = await ensureSignedIn();
+  if (!userId) {
+    throw new Error('Could not sign in to the photo backend. Try again.');
+  }
 
   const extension = photoUri.split('.').pop()?.split('?')[0]?.toLowerCase() === 'png' ? 'png' : 'jpg';
-  const sourcePath = `uploads/${Date.now()}.${extension}`;
+  const sourcePath = `uploads/${userId}/${Date.now()}.${extension}`;
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(
     sourcePath,
     new File(photoUri),
@@ -64,7 +68,7 @@ async function runBackendEdit(
 
   const { data: job, error: jobError } = await supabase
     .from('edit_jobs')
-    .insert({ tool_id: toolId, intensity, source_path: sourcePath, status: 'queued' })
+    .insert({ tool_id: toolId, intensity, source_path: sourcePath, status: 'queued', user_id: userId })
     .select('id')
     .single();
   if (jobError || !job) {
