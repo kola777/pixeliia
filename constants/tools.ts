@@ -3,6 +3,7 @@ export type ToolCategoryId =
   | 'enhance'
   | 'face'
   | 'body'
+  | 'age'
   | 'outfit'
   | 'camera'
   | 'background'
@@ -21,6 +22,7 @@ export const CATEGORIES: { id: ToolCategoryId; name: string; blurb: string }[] =
   { id: 'enhance', name: 'Enhance', blurb: 'Quality, sharpness, low light' },
   { id: 'face', name: 'Face & Skin', blurb: 'Texture-preserving retouch' },
   { id: 'body', name: 'Body', blurb: 'Subtle proportion tools' },
+  { id: 'age', name: 'Age', blurb: 'Reimagine age, identity preserved' },
   { id: 'outfit', name: 'Outfit', blurb: 'Color, style, replace clothing' },
   { id: 'camera', name: 'Camera Look', blurb: 'Phone-camera style simulation' },
   { id: 'background', name: 'Background', blurb: 'Remove, blur, replace' },
@@ -134,6 +136,13 @@ export const TOOLS: Tool[] = [
     intensity: true,
   },
   {
+    id: 'age-edit',
+    name: 'Age Transform',
+    category: 'age',
+    description: 'Reimagine the person at any age. Clearly labeled as an AI edit.',
+    intensity: false,
+  },
+  {
     id: 'outfit-color',
     name: 'Change Outfit Color',
     category: 'outfit',
@@ -202,9 +211,20 @@ export const FEATURED_TOOL_IDS = [
   'auto-edit',
   'enhance-photo',
   'smooth-skin',
+  'age-edit',
   'remove-background',
   'outfit-color',
   'iphone-look',
+];
+
+/** PRD 7.5 age presets: label plus representative target age. */
+export const AGE_PRESETS = [
+  { label: 'Newborn', age: 0 },
+  { label: 'Child', age: 7 },
+  { label: 'Teen', age: 15 },
+  { label: 'Adult', age: 30 },
+  { label: 'Senior', age: 70 },
+  { label: '100 Years', age: 100 },
 ];
 
 export function toolById(id: string) {

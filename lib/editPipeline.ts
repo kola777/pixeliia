@@ -38,10 +38,16 @@ async function downloadResultToCache(
   return downloaded.uri;
 }
 
+export type EditParams = {
+  /** Target age for the age-transform tool (0-100). */
+  age?: number;
+};
+
 async function runBackendEdit(
   photoUri: string,
   toolId: string,
-  intensity: number
+  intensity: number,
+  params: EditParams
 ): Promise<string> {
   const supabase = getSupabase();
   if (!supabase) {
@@ -68,7 +74,14 @@ async function runBackendEdit(
 
   const { data: job, error: jobError } = await supabase
     .from('edit_jobs')
-    .insert({ tool_id: toolId, intensity, source_path: sourcePath, status: 'queued', user_id: userId })
+    .insert({
+      tool_id: toolId,
+      intensity,
+      source_path: sourcePath,
+      status: 'queued',
+      user_id: userId,
+      params,
+    })
     .select('id')
     .single();
   if (jobError || !job) {
@@ -98,11 +111,12 @@ async function runBackendEdit(
 export async function runEdit(
   photoUri: string,
   toolId: string,
-  intensity: number
+  intensity: number,
+  params: EditParams = {}
 ): Promise<string> {
   if (!isSupabaseConfigured()) {
     await delay(900);
     return photoUri;
   }
-  return runBackendEdit(photoUri, toolId, intensity);
+  return runBackendEdit(photoUri, toolId, intensity, params);
 }

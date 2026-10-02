@@ -13,9 +13,11 @@ import {
 import { AppScreen } from '@/components/AppScreen';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors, radius, space } from '@/constants/theme';
-import { toolById } from '@/constants/tools';
+import Slider from '@react-native-community/slider';
+
+import { AGE_PRESETS, toolById } from '@/constants/tools';
 import { useEditor } from '@/context/EditorContext';
-import { runEdit } from '@/lib/editPipeline';
+import { runEdit, type EditParams } from '@/lib/editPipeline';
 import { pickPhotoFromLibrary } from '@/lib/pickPhoto';
 
 const INTENSITY = [
@@ -32,15 +34,18 @@ export default function EditorScreen() {
   const [busy, setBusy] = useState(false);
   const [showAfter, setShowAfter] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [age, setAge] = useState(30);
   const lastRunKey = useRef<string | null>(null);
+  const isAgeTool = tool?.id === 'age-edit';
 
   async function applyEdit() {
     if (!photoUri || !tool || busy) return;
-    lastRunKey.current = `${tool.id}:${photoUri}:${intensity}`;
+    const params: EditParams = tool.id === 'age-edit' ? { age } : {};
+    lastRunKey.current = `${tool.id}:${photoUri}:${intensity}:${tool.id === 'age-edit' ? age : ''}`;
     setBusy(true);
     setError(null);
     try {
-      const output = await runEdit(photoUri, tool.id, intensity);
+      const output = await runEdit(photoUri, tool.id, intensity, params);
       setResult(output);
       setShowAfter(true);
     } catch {
@@ -53,17 +58,18 @@ export default function EditorScreen() {
   useEffect(() => {
     const sourceUri = photoUri;
     const activeTool = tool;
-    if (!sourceUri || resultUri || !activeTool) return;
-    const key = `${activeTool.id}:${sourceUri}:${intensity}`;
+    if (!sourceUri || resultUri || !activeTool || busy) return;
+    const targetAge = activeTool.id === 'age-edit' ? age : '';
+    const key = `${activeTool.id}:${sourceUri}:${intensity}:${targetAge}`;
     if (lastRunKey.current === key) return;
     lastRunKey.current = key;
     let cancelled = false;
 
-    async function run(uri: string, toolId: string, level: number) {
+    async function run(uri: string, toolId: string, level: number, params: EditParams) {
       setBusy(true);
       setError(null);
       try {
-        const output = await runEdit(uri, toolId, level);
+        const output = await runEdit(uri, toolId, level, params);
         if (cancelled) return;
         setResult(output);
         setShowAfter(true);
@@ -74,11 +80,11 @@ export default function EditorScreen() {
       }
     }
 
-    run(sourceUri, activeTool.id, intensity);
+    run(sourceUri, activeTool.id, intensity, activeTool.id === 'age-edit' ? { age } : {});
     return () => {
       cancelled = true;
     };
-  }, [photoUri, resultUri, tool, intensity, setResult]);
+  }, [photoUri, resultUri, tool, intensity, age, busy, setResult]);
 
   async function choosePhoto() {
     const uri = await pickPhotoFromLibrary();
@@ -90,7 +96,7 @@ export default function EditorScreen() {
 
   function resetToOriginal() {
     if (!photoUri || !tool || busy) return;
-    lastRunKey.current = `${tool.id}:${photoUri}:${intensity}`;
+    lastRunKey.current = `${tool.id}:${photoUri}:${intensity}:${tool.id === 'age-edit' ? age : ''}`;
     setResult(null);
     setShowAfter(false);
     setError(null);
@@ -184,6 +190,11 @@ export default function EditorScreen() {
               accessibilityRole="button">
               <Text style={styles.reapplyLabel}>Reset to original</Text>
             </Pressable>
+            {isAgeTool && showAfter ? (
+              <Text style={styles.aiLabel}>
+                AI age transformation — a generated edit, not a real photo of this age.
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -216,6 +227,50 @@ export default function EditorScreen() {
               <Text style={styles.reapplyLabel}>
                 {resultUri ? 'Apply intensity' : `Apply ${tool.name}`}
               </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {isAgeTool && photoUri ? (
+          <View>
+            <Text style={styles.section}>Target age: {age}</Text>
+            <Slider
+              value={age}
+              onValueChange={setAge}
+              minimumValue={0}
+              maximumValue={100}
+              step={1}
+              minimumTrackTintColor={colors.accent}
+              maximumTrackTintColor={colors.border}
+              thumbTintColor={colors.accent}
+              disabled={busy}
+              accessibilityLabel="Target age"
+            />
+            <View style={styles.presetRow}>
+              {AGE_PRESETS.map((preset) => (
+                <Pressable
+                  key={preset.label}
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => setAge(preset.age)}
+                  style={[
+                    styles.preset,
+                    age === preset.age && styles.toggleOn,
+                    busy && styles.disabled,
+                  ]}>
+                  <Text
+                    style={[styles.toggleLabel, age === preset.age && styles.toggleLabelOn]}>
+                    {preset.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              onPress={applyEdit}
+              disabled={busy}
+              style={styles.reapply}
+              accessibilityRole="button">
+              <Text style={styles.reapplyLabel}>Show age {age}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -346,6 +401,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 8,
+  },
+  aiLabel: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+    color: colors.accent,
+    marginTop: 8,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  preset: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
   },
   disabled: {
     opacity: 0.5,

@@ -47,6 +47,7 @@ type JobRow = {
   source_path: string;
   status: string;
   user_id: string | null;
+  params: { age?: number } | null;
 };
 
 // One-click tools become short natural-language instructions. Intensity is
@@ -84,7 +85,25 @@ const INTENSITY_WORDS: Array<[number, string]> = [
   [0, "very subtly"],
 ];
 
-function promptFor(toolId: string, intensity: number): string {
+function promptFor(
+  toolId: string,
+  intensity: number,
+  params: { age?: number } | null,
+): string {
+  if (toolId === "age-edit") {
+    const target = Math.min(100, Math.max(0, Math.round(params?.age ?? 30)));
+    const stage =
+      target <= 2
+        ? "a newborn baby"
+        : target <= 12
+          ? `a ${target}-year-old child`
+          : target <= 19
+            ? `a ${target}-year-old teenager`
+            : target <= 59
+              ? `a ${target}-year-old adult`
+              : `a ${target}-year-old senior`;
+    return `Reimagine the person in this photo as ${stage}, keeping their identity, pose, clothing, lighting and background recognizable. Natural skin texture appropriate for that age, no plastic smoothing, no warped shapes, no fake lighting.`;
+  }
   const base =
     TOOL_PROMPTS[toolId] ?? "Improve this photo while keeping it natural";
   const strength =
@@ -223,7 +242,7 @@ Deno.serve(async (req) => {
   // Owner-scoped read: RLS only returns this caller's own rows.
   const { data: job, error: jobError } = await userClient
     .from("edit_jobs")
-    .select("id,tool_id,intensity,source_path,status,user_id")
+    .select("id,tool_id,intensity,source_path,status,user_id,params")
     .eq("id", jobId)
     .single();
   if (jobError || !job) {
@@ -266,7 +285,7 @@ Deno.serve(async (req) => {
     const { model, input } = buildModelInput(
       operation,
       signed.signedUrl,
-      promptFor(row.tool_id, row.intensity),
+      promptFor(row.tool_id, row.intensity, row.params),
     );
     const outputUrl = await runPrediction(model, input);
 
