@@ -1,12 +1,21 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { AppScreen } from '@/components/AppScreen';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors, radius, space } from '@/constants/theme';
 import { toolById } from '@/constants/tools';
 import { useEditor } from '@/context/EditorContext';
+import { runEdit } from '@/lib/editPipeline';
 import { pickPhotoFromLibrary } from '@/lib/pickPhoto';
 
 const INTENSITY = [
@@ -23,45 +32,68 @@ export default function EditorScreen() {
   const [busy, setBusy] = useState(false);
   const [showAfter, setShowAfter] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const lastRunKey = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (!photoUri || resultUri || !tool) return;
-    let cancelled = false;
-
-    async function run() {
-      setBusy(true);
-      setError(null);
-      await new Promise((resolve) => setTimeout(resolve, 1100));
-      if (cancelled) return;
-      setResult(photoUri);
-      setShowAfter(true);
-      setBusy(false);
-    }
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [photoUri, resultUri, tool, setResult]);
-
-  async function choosePhoto() {
-    const uri = await pickPhotoFromLibrary();
-    if (uri) setPhoto(uri);
-  }
-
-  async function applyAgain() {
-    if (!photoUri) return;
+  async function applyEdit() {
+    if (!photoUri || !tool || busy) return;
+    lastRunKey.current = `${tool.id}:${photoUri}:${intensity}`;
     setBusy(true);
     setError(null);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      setResult(photoUri);
+      const output = await runEdit(photoUri, tool.id, intensity);
+      setResult(output);
       setShowAfter(true);
     } catch {
       setError('Edit failed. Try again.');
     } finally {
       setBusy(false);
     }
+  }
+
+  useEffect(() => {
+    const sourceUri = photoUri;
+    const activeTool = tool;
+    if (!sourceUri || resultUri || !activeTool) return;
+    const key = `${activeTool.id}:${sourceUri}:${intensity}`;
+    if (lastRunKey.current === key) return;
+    lastRunKey.current = key;
+    let cancelled = false;
+
+    async function run(uri: string, toolId: string, level: number) {
+      setBusy(true);
+      setError(null);
+      try {
+        const output = await runEdit(uri, toolId, level);
+        if (cancelled) return;
+        setResult(output);
+        setShowAfter(true);
+      } catch {
+        if (!cancelled) setError('Edit failed. Try again.');
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    }
+
+    run(sourceUri, activeTool.id, intensity);
+    return () => {
+      cancelled = true;
+    };
+  }, [photoUri, resultUri, tool, intensity, setResult]);
+
+  async function choosePhoto() {
+    const uri = await pickPhotoFromLibrary();
+    if (uri) {
+      lastRunKey.current = null;
+      setPhoto(uri);
+    }
+  }
+
+  function resetToOriginal() {
+    if (!photoUri || !tool || busy) return;
+    lastRunKey.current = `${tool.id}:${photoUri}:${intensity}`;
+    setResult(null);
+    setShowAfter(false);
+    setError(null);
   }
 
   if (!tool) {
@@ -91,34 +123,66 @@ export default function EditorScreen() {
           </View>
         ) : (
           <View>
-            <Image
-              source={{ uri: previewUri ?? photoUri }}
-              style={styles.photo}
+            <Pressable
+              accessibilityRole="imagebutton"
               accessibilityLabel={showAfter ? 'Edited photo' : 'Original photo'}
-            />
+              accessibilityHint="Hold to peek at the original photo"
+              delayLongPress={200}
+              onLongPress={() => setShowAfter(false)}
+              onPressOut={() => setShowAfter(true)}>
+              <Image
+                source={{ uri: previewUri ?? photoUri }}
+                style={styles.photo}
+                accessibilityLabel={showAfter ? 'Edited photo' : 'Original photo'}
+              />
+            </Pressable>
             {busy ? (
               <View style={styles.busy}>
+                <ActivityIndicator color={colors.accent} />
                 <Text style={styles.busyText}>Processing {tool.name}…</Text>
               </View>
             ) : null}
           </View>
         )}
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        {photoUri && resultUri && !busy ? (
-          <View style={styles.toggleRow}>
+        {error ? (
+          <View style={styles.errorRow}>
+            <Text style={styles.error}>{error}</Text>
             <Pressable
-              accessibilityRole="button"
-              onPress={() => setShowAfter(false)}
-              style={[styles.toggle, !showAfter && styles.toggleOn]}>
-              <Text style={[styles.toggleLabel, !showAfter && styles.toggleLabelOn]}>Before</Text>
+              onPress={applyEdit}
+              disabled={busy}
+              style={styles.reapply}
+              accessibilityRole="button">
+              <Text style={styles.reapplyLabel}>Retry</Text>
             </Pressable>
+          </View>
+        ) : null}
+
+        {photoUri && resultUri ? (
+          <View>
+            <View style={styles.toggleRow}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => setShowAfter(false)}
+                style={[styles.toggle, !showAfter && styles.toggleOn, busy && styles.disabled]}>
+                <Text style={[styles.toggleLabel, !showAfter && styles.toggleLabelOn]}>Before</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => setShowAfter(true)}
+                style={[styles.toggle, showAfter && styles.toggleOn, busy && styles.disabled]}>
+                <Text style={[styles.toggleLabel, showAfter && styles.toggleLabelOn]}>After</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.hint}>Hold the photo to peek at Before. Or reset:</Text>
             <Pressable
-              accessibilityRole="button"
-              onPress={() => setShowAfter(true)}
-              style={[styles.toggle, showAfter && styles.toggleOn]}>
-              <Text style={[styles.toggleLabel, showAfter && styles.toggleLabelOn]}>After</Text>
+              onPress={resetToOriginal}
+              disabled={busy}
+              style={styles.reapply}
+              accessibilityRole="button">
+              <Text style={styles.reapplyLabel}>Reset to original</Text>
             </Pressable>
           </View>
         ) : null}
@@ -131,19 +195,28 @@ export default function EditorScreen() {
                 <Pressable
                   key={option.value}
                   accessibilityRole="button"
+                  disabled={busy}
                   onPress={() => setIntensity(option.value)}
-                  style={[styles.toggle, intensity === option.value && styles.toggleOn]}>
+                  style={[
+                    styles.toggle,
+                    intensity === option.value && styles.toggleOn,
+                    busy && styles.disabled,
+                  ]}>
                   <Text style={[styles.toggleLabel, intensity === option.value && styles.toggleLabelOn]}>
                     {option.label}
                   </Text>
                 </Pressable>
               ))}
             </View>
-            {resultUri ? (
-              <Pressable onPress={applyAgain} style={styles.reapply} accessibilityRole="button">
-                <Text style={styles.reapplyLabel}>Apply intensity</Text>
-              </Pressable>
-            ) : null}
+            <Pressable
+              onPress={applyEdit}
+              disabled={busy}
+              style={styles.reapply}
+              accessibilityRole="button">
+              <Text style={styles.reapplyLabel}>
+                {resultUri ? 'Apply intensity' : `Apply ${tool.name}`}
+              </Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -192,7 +265,9 @@ const styles = StyleSheet.create({
   busy: {
     marginTop: 10,
     minHeight: 44,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   busyText: {
     color: colors.accent,
@@ -263,5 +338,16 @@ const styles = StyleSheet.create({
   error: {
     color: '#B42318',
     fontWeight: '600',
+  },
+  errorRow: {
+    gap: 4,
+  },
+  hint: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 8,
+  },
+  disabled: {
+    opacity: 0.5,
   },
 });
