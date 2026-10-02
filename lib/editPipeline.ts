@@ -8,23 +8,18 @@ import { getSupabase, isSupabaseConfigured } from './supabase';
  *
  * - Backend configured: upload the photo to the `pixeliia` storage bucket,
  *   insert an `edit_jobs` row (see supabase/migrations/0001_edit_jobs.sql),
- *   poll until the worker finishes, then download the result into the app
- *   cache and return its local URI. Failures throw so the editor can offer
- *   Retry — a failed backend never silently returns the original.
+ *   invoke the `process-edit-job` Edge Function worker and download the
+ *   result into the app cache, returning its local URI. Failures throw so
+ *   the editor can offer Retry — a failed backend never silently returns
+ *   the original.
  * - Backend missing: local placeholder returns the original photo so the
  *   full editor UX stays testable without keys.
  */
 
 const BUCKET = 'pixeliia';
-const POLL_INTERVAL_MS = 2000;
-const TIMEOUT_MS = 120_000;
-
-type EditJobRow = {
-  id: string;
-  status: 'queued' | 'processing' | 'succeeded' | 'failed';
-  result_path: string | null;
-  error: string | null;
-};
+// Matches the platform's function wall-clock budget; the worker polls
+// Replicate server-side, so the app holds one connection until it answers.
+const INVOKE_TIMEOUT_MS = 150_000;
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -77,31 +72,23 @@ async function runBackendEdit(
   }
   const jobId = (job as { id: string }).id;
 
-  const startedAt = Date.now();
-  for (;;) {
-    if (Date.now() - startedAt > TIMEOUT_MS) {
+  const { data, error: invokeError } = await Promise.race([
+    supabase.functions.invoke<{
+      ok: boolean;
+      result_path?: string | null;
+      error?: string;
+    }>('process-edit-job', { body: { jobId } }),
+    delay(INVOKE_TIMEOUT_MS).then((): never => {
       throw new Error('Edit timed out. Try again.');
-    }
-    await delay(POLL_INTERVAL_MS);
-    const { data, error } = await supabase
-      .from('edit_jobs')
-      .select('id,status,result_path,error')
-      .eq('id', jobId)
-      .single();
-    if (error) {
-      throw new Error(`Edit status check failed: ${error.message}`);
-    }
-    const row = data as EditJobRow;
-    if (row.status === 'succeeded') {
-      if (!row.result_path) {
-        throw new Error('Edit finished without a result. Try again.');
-      }
-      return downloadResultToCache(supabase, row.result_path);
-    }
-    if (row.status === 'failed') {
-      throw new Error(row.error || 'Edit failed. Try again.');
-    }
+    }),
+  ]);
+  if (invokeError) {
+    throw new Error(`Edit worker unreachable: ${invokeError.message}`);
   }
+  if (!data?.ok || !data.result_path) {
+    throw new Error(data?.error || 'Edit failed. Try again.');
+  }
+  return downloadResultToCache(supabase, data.result_path);
 }
 
 export async function runEdit(
