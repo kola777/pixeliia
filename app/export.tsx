@@ -43,7 +43,7 @@ export default function ExportScreen() {
   const router = useRouter();
   const { toolId } = useLocalSearchParams<{ toolId?: string }>();
   const tool = toolById(toolId ?? '');
-  const { photoUri, resultUri, balance, spend, grantTestEspee, saveProject } = useEditor();
+  const { photoUri, resultUri, balance, spend, refund, grantTestEspee, saveProject } = useEditor();
   const { width: windowWidth } = useWindowDimensions();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -123,6 +123,7 @@ export default function ExportScreen() {
       Alert.alert('No photo', 'Select a photo before exporting.');
       return;
     }
+    if (!(await ensureGalleryPermission())) return;
     if (!spend(2, 'HD Download')) {
       offerTestTopUp();
       return;
@@ -130,7 +131,6 @@ export default function ExportScreen() {
     setBusy(true);
     setStatus('Preparing HD export…');
     try {
-      if (!(await ensureGalleryPermission())) return;
       const native = await getPhotoSize(sourceUri);
       const target = fitWithin(native.width, native.height, HD_MAX_EDGE);
       const fileUri = await captureRef(compositionRef, {
@@ -144,9 +144,10 @@ export default function ExportScreen() {
       track('export_completed', { option: 'hd', paid: true, cost: 2 });
       finishExport(`HD download (${target.width}×${target.height}) with Pixeliia watermark. 2 ESPEE charged.`);
     } catch (err) {
+      refund(2, 'HD Download');
       Alert.alert(
         'Save failed',
-        err instanceof Error ? err.message : 'Could not save to the gallery. Try again.'
+        `${err instanceof Error ? err.message : 'Could not save to the gallery.'} Your 2 ESPEE were refunded.`
       );
     } finally {
       setBusy(false);
@@ -159,6 +160,7 @@ export default function ExportScreen() {
       Alert.alert('No photo', 'Select a photo before exporting.');
       return;
     }
+    if (!(await ensureGalleryPermission())) return;
     if (!spend(1, 'Remove Pixeliia Watermark')) {
       offerTestTopUp();
       return;
@@ -166,12 +168,12 @@ export default function ExportScreen() {
     setBusy(true);
     setStatus('Saving clean export…');
     try {
-      if (!(await ensureGalleryPermission())) return;
       await saveFile(sourceUri);
       track('export_completed', { option: 'remove-watermark', paid: true, cost: 1 });
       finishExport('Clean export without the Pixeliia mark. 1 ESPEE charged.');
     } catch {
-      Alert.alert('Save failed', 'Could not save to the gallery. Try again.');
+      refund(1, 'Remove Pixeliia Watermark');
+      Alert.alert('Save failed', 'Could not save to the gallery. Your 1 ESPEE was refunded.');
     } finally {
       setBusy(false);
       setStatus(null);

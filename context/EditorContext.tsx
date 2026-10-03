@@ -42,6 +42,8 @@ type EditorContextValue = {
   openProject: (id: string) => void;
   /** Deducts ESPEE and records the purchase. Returns false when funds are short. */
   spend: (amount: number, label: string) => boolean;
+  /** Returns ESPEE for a purchase that failed after charging. Never fails. */
+  refund: (amount: number, label: string) => void;
   /** Clearly-labeled test grant until real billing lands. */
   grantTestEspee: () => void;
 };
@@ -206,6 +208,17 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     [balance]
   );
 
+  const refund = useCallback((amount: number, label: string) => {
+    if (amount <= 0) return;
+    setBalance((current) => current + amount);
+    setLedger((current) =>
+      [
+        { id: `${Date.now()}`, label: `Refund: ${label}`, delta: amount, createdAt: Date.now() },
+        ...current,
+      ].slice(0, 50)
+    );
+  }, []);
+
   const grantTestEspee = useCallback(() => {
     setBalance((current) => current + TEST_GRANT);
     setLedger((current) =>
@@ -231,6 +244,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       saveProject,
       openProject,
       spend,
+      refund,
       grantTestEspee,
     }),
     [
@@ -246,6 +260,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       saveProject,
       openProject,
       spend,
+      refund,
       grantTestEspee,
     ]
   );
