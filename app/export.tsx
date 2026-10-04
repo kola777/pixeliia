@@ -1,4 +1,3 @@
-import { captureRef } from 'react-native-view-shot';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
@@ -11,8 +10,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Asset, requestPermissionsAsync } from 'expo-media-library';
-
 import { AppScreen } from '@/components/AppScreen';
 import { WatermarkedPhoto } from '@/components/WatermarkedPhoto';
 import { EXPORT_OPTIONS } from '@/constants/exportOptions';
@@ -20,6 +17,8 @@ import { colors, radius, space } from '@/constants/theme';
 import { toolById } from '@/constants/tools';
 import { useEditor } from '@/context/EditorContext';
 import { track } from '@/lib/analytics';
+import { captureComposition } from '@/lib/capturePhoto';
+import { requestGalleryAccess, saveToGallery } from '@/lib/gallery';
 
 const PREVIEW_HEIGHT = 360;
 const HD_MAX_EDGE = 2048;
@@ -53,8 +52,8 @@ export default function ExportScreen() {
   const previewWidth = Math.round(windowWidth - space.md * 2);
 
   async function ensureGalleryPermission() {
-    const permission = await requestPermissionsAsync();
-    if (!permission.granted) {
+    const granted = await requestGalleryAccess();
+    if (!granted) {
       Alert.alert('Gallery access needed', 'Allow gallery access to save your exported photo.');
       return false;
     }
@@ -62,8 +61,7 @@ export default function ExportScreen() {
   }
 
   async function saveFile(uri: string) {
-    const asset = await Asset.create(uri);
-    return asset;
+    await saveToGallery(uri);
   }
 
   function finishExport(label: string) {
@@ -93,11 +91,7 @@ export default function ExportScreen() {
       let fileUri: string;
       let watermarked = true;
       try {
-        fileUri = await captureRef(compositionRef, {
-          format: 'jpg',
-          quality: 0.9,
-          result: 'tmpfile',
-        });
+        fileUri = await captureComposition(compositionRef, { quality: 0.9 });
       } catch {
         // view-shot is native-only; on web fall back to the plain file.
         fileUri = sourceUri;
@@ -133,10 +127,8 @@ export default function ExportScreen() {
     try {
       const native = await getPhotoSize(sourceUri);
       const target = fitWithin(native.width, native.height, HD_MAX_EDGE);
-      const fileUri = await captureRef(compositionRef, {
-        format: 'jpg',
+      const fileUri = await captureComposition(compositionRef, {
         quality: 1,
-        result: 'tmpfile',
         width: target.width,
         height: target.height,
       });
