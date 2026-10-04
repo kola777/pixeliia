@@ -30,7 +30,7 @@ export const CATEGORIES: { id: ToolCategoryId; name: string; blurb: string }[] =
   { id: 'age', name: 'Age', blurb: 'Reimagine age, identity preserved' },
   { id: 'studio', name: 'Appearance Studio', blurb: 'Hair, makeup and style looks' },
   { id: 'outfit', name: 'Outfit', blurb: 'Color, style, replace clothing' },
-  { id: 'camera', name: 'Camera Look', blurb: 'Phone-camera style simulation' },
+  { id: 'camera', name: 'Camera Look', blurb: 'Flagship camera characteristics, honestly labeled' },
   { id: 'background', name: 'Background', blurb: 'Remove, blur, replace' },
   { id: 'cleanup', name: 'Cleanup', blurb: 'Object and distraction removal' },
 ];
@@ -234,45 +234,43 @@ export const TOOLS: Tool[] = [
     aiNotice: 'AI outfit edit — clothing was changed in this generated edit.',
   },
   {
-    id: 'iphone-look',
-    name: 'iPhone Look',
+    id: 'iphone-natural',
+    name: 'iPhone Natural',
     category: 'camera',
-    description: 'Simulated iPhone camera processing — a look, not a device claim.',
+    description:
+      'The default reference look: natural premium rendering, true-to-life color — characteristics inspired by flagship phones, not a device claim.',
     intensity: true,
   },
   {
-    id: 'pixel-look',
-    name: 'Pixel Look',
+    id: 'iphone-portrait',
+    name: 'iPhone Portrait',
     category: 'camera',
-    description: 'Simulated Google Pixel color and HDR feel.',
+    description:
+      'Natural rendering with soft portrait depth — characteristics inspired by flagship phones, not a device claim.',
     intensity: true,
   },
   {
-    id: 'galaxy-look',
-    name: 'Galaxy Look',
+    id: 'pixel-natural',
+    name: 'Pixel Natural',
     category: 'camera',
-    description: 'Simulated Samsung Galaxy camera rendering.',
+    description:
+      'Computational-photography look with crisp detail and natural skin — characteristics inspired by flagship phones, not a device claim.',
     intensity: true,
   },
   {
-    id: 'xiaomi-look',
-    name: 'Xiaomi Look',
+    id: 'samsung-vivid',
+    name: 'Samsung Vivid',
     category: 'camera',
-    description: 'Simulated Xiaomi camera rendering with vibrant detail — a look, not a device claim.',
+    description:
+      'Sharp, detailed, vibrant flagship look — characteristics inspired by flagship phones, not a device claim.',
     intensity: true,
   },
   {
-    id: 'huawei-look',
-    name: 'Huawei Look',
+    id: 'pixeliia-natural',
+    name: 'Pixeliia Natural',
     category: 'camera',
-    description: 'Simulated Huawei camera rendering with rich contrast — a look, not a device claim.',
-    intensity: true,
-  },
-  {
-    id: 'oneplus-look',
-    name: 'OnePlus Look',
-    category: 'camera',
-    description: 'Simulated OnePlus camera rendering with natural color — a look, not a device claim.',
+    description:
+      'Our house signature: balanced, natural finish with invisible processing. No device imitation at all.',
     intensity: true,
   },
   {
@@ -307,7 +305,7 @@ export const FEATURED_TOOL_IDS = [
   'age-edit',
   'remove-background',
   'replace-clothing',
-  'iphone-look',
+  'iphone-natural',
 ];
 
 /** PRD 7.5 age presets: label plus representative target age. */
