@@ -69,12 +69,12 @@ const TOOL_PROMPTS: Record<string, string> = {
   slimmer: "Make the body subtly slimmer without warping the background",
   "more-athletic": "Make the build slightly more athletic while keeping pose and clothing",
   "adjust-waist": "Subtly adjust the waist while preserving identity and background",
-  "outfit-color": "Change only the clothing color, keep the garment shape and folds",
-  "outfit-style": "Restyle the existing outfit while keeping the person and pose",
-  "replace-clothing": "Replace the clothing with a stylish new outfit, keep face, body and pose",
   "iphone-look": "Apply a natural iPhone-style camera look: clean color, balanced HDR",
   "pixel-look": "Apply a Google Pixel-style camera look: crisp detail, vivid yet natural color",
   "galaxy-look": "Apply a Samsung Galaxy-style camera look: rich color, smooth rendering",
+  "xiaomi-look": "Apply a Xiaomi-style camera look: vibrant detail, lively color",
+  "huawei-look": "Apply a Huawei-style camera look: rich contrast, refined color",
+  "oneplus-look": "Apply a OnePlus-style camera look: natural balanced color",
   "blur-background": "Blur the background with a portrait effect, keep the subject sharp",
   "remove-object": "Remove the most prominent unwanted object or distraction, fill in naturally",
 };
@@ -90,6 +90,12 @@ const STUDIO_BASE: Record<string, string> = {
   "makeup-look": "Apply a makeup look",
   "facial-hair": "Adjust the facial hair",
   "style-preset": "Restyle the overall fashion look",
+};
+
+const OUTFIT_BASE: Record<string, string> = {
+  "outfit-color": "Change only the clothing color",
+  "outfit-style": "Restyle the existing outfit",
+  "replace-clothing": "Transform the outfit into a new clothing type",
 };
 
 function promptFor(
@@ -111,12 +117,17 @@ function promptFor(
               : `a ${target}-year-old senior`;
     return `Reimagine the person in this photo as ${stage}, keeping their identity, pose, clothing, lighting and background recognizable. Natural skin texture appropriate for that age, no plastic smoothing, no warped shapes, no fake lighting.`;
   }
+  const rawVariant = params?.variant;
+  const variant =
+    typeof rawVariant === "string" ? rawVariant.trim().slice(0, 40) : "";
+  const look = variant ? ` (${variant})` : "";
   const studioBase = STUDIO_BASE[toolId];
   if (studioBase) {
-    const rawVariant = params?.variant;
-    const variant = typeof rawVariant === "string" ? rawVariant.trim().slice(0, 40) : "";
-    const look = variant ? ` (${variant})` : "";
     return `${studioBase}${look}, keeping the person recognizable: same face, identity, pose and background. Realistic blending, natural texture, no plastic skin, no distortion.`;
+  }
+  const outfitBase = OUTFIT_BASE[toolId];
+  if (outfitBase) {
+    return `${outfitBase}${look}, keeping the person's face, body, pose, lighting and background. Realistic garment folds and fabric texture, no warping.`;
   }
   const base =
     TOOL_PROMPTS[toolId] ?? "Improve this photo while keeping it natural";

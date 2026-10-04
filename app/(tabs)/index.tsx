@@ -4,6 +4,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { AdSlot } from '@/components/AdSlot';
 import { AppScreen } from '@/components/AppScreen';
 import { Billboard } from '@/components/Billboard';
+import { Logo } from '@/components/Logo';
 import { ToolCard } from '@/components/ToolCard';
 import { FEATURED_TOOL_IDS, toolById } from '@/constants/tools';
 import { colors, space } from '@/constants/theme';
@@ -17,7 +18,7 @@ export default function HomeScreen() {
   return (
     <AppScreen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.wordmark}>Pixeliia</Text>
+        <Logo />
         <Text style={styles.headline}>One tap. Better photos.</Text>
 
         <Billboard />
@@ -75,11 +76,6 @@ const styles = StyleSheet.create({
     paddingTop: space.md,
     paddingBottom: space.xl,
     gap: space.md,
-  },
-  wordmark: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.accent,
   },
   headline: {
     fontSize: 28,

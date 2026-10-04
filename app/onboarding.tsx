@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AppScreen } from '@/components/AppScreen';
+import { Logo } from '@/components/Logo';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors, space } from '@/constants/theme';
 import { track } from '@/lib/analytics';
@@ -43,7 +44,7 @@ export default function OnboardingScreen() {
   return (
     <AppScreen>
       <View style={styles.wrap}>
-        <Text style={styles.wordmark}>Pixeliia</Text>
+        <Logo />
         <Text style={styles.headline}>Photo editing as simple as choosing a button.</Text>
         <View style={styles.list}>
           {POINTS.map((point) => (
@@ -64,12 +65,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: space.xl,
     gap: space.lg,
-  },
-  wordmark: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.accent,
-    letterSpacing: 0.4,
   },
   headline: {
     fontSize: 32,
