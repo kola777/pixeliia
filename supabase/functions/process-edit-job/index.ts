@@ -32,6 +32,12 @@ const EDIT_MODEL =
 const UPSCALE_MODEL =
   Deno.env.get("REPLICATE_UPSCALE_MODEL") ?? "nightmareai/real-esrgan";
 const BG_MODEL = Deno.env.get("REPLICATE_BG_MODEL") ?? "cjwbw/rembg";
+// Specialized models. Slugs below are best-known defaults — confirm on
+// replicate.com before production. INPAINT_MODEL has no default: when unset,
+// object removal falls back to the instruction-edit model.
+const FACE_RESTORE_MODEL =
+  Deno.env.get("REPLICATE_FACE_MODEL") ?? "tencentarc/gfpgan";
+const INPAINT_MODEL = Deno.env.get("REPLICATE_INPAINT_MODEL") ?? "";
 // Kontext-style edit models name their image field differently; override
 // without redeploying code if the API tab shows another name.
 const EDIT_IMAGE_KEY = Deno.env.get("REPLICATE_EDIT_IMAGE_KEY") ?? "input_image";
@@ -97,6 +103,10 @@ const OUTFIT_BASE: Record<string, string> = {
   "replace-clothing": "Transform the outfit into a new clothing type",
 };
 
+const BACKGROUND_BASE: Record<string, string> = {
+  "replace-background": "Replace the background with a new scene",
+};
+
 function promptFor(
   toolId: string,
   intensity: number,
@@ -128,6 +138,10 @@ function promptFor(
   if (outfitBase) {
     return `${outfitBase}${look}, keeping the person's face, body, pose, lighting and background. Realistic garment folds and fabric texture, no warping.`;
   }
+  const backgroundBase = BACKGROUND_BASE[toolId];
+  if (backgroundBase) {
+    return `${backgroundBase}${look}, keeping the subject identical: same person, face, pose, clothing and scale, with natural edge blending and lighting matched to the new scene.`;
+  }
   const base =
     TOOL_PROMPTS[toolId] ?? "Improve this photo while keeping it natural";
   const strength =
@@ -135,16 +149,20 @@ function promptFor(
   return `${base}, ${strength}. Preserve the person's identity, pose, clothing, lighting and background unless the tool says otherwise. Avoid plastic skin, warped shapes and fake lighting.`;
 }
 
-function operationFor(toolId: string): "upscale" | "remove-background" | "edit" {
+type Operation = "upscale" | "remove-background" | "restore" | "inpaint" | "edit";
+
+function operationFor(toolId: string): Operation {
   if (toolId === "hd-enhance") return "upscale";
   if (toolId === "remove-background") return "remove-background";
+  if (toolId === "face-enhance") return "restore";
+  if (toolId === "remove-object" && INPAINT_MODEL) return "inpaint";
   return "edit";
 }
 
 // Isolated input-shape builders: if a model run fails with a schema error,
 // only these need adjusting (verify against each model's API tab).
 function buildModelInput(
-  operation: "upscale" | "remove-background" | "edit",
+  operation: Operation,
   imageUrl: string,
   prompt: string,
 ): { model: string; input: Record<string, unknown> } {
@@ -156,6 +174,12 @@ function buildModelInput(
   }
   if (operation === "remove-background") {
     return { model: BG_MODEL, input: { image: imageUrl } };
+  }
+  if (operation === "restore") {
+    return { model: FACE_RESTORE_MODEL, input: { img: imageUrl } };
+  }
+  if (operation === "inpaint") {
+    return { model: INPAINT_MODEL, input: { image: imageUrl, prompt } };
   }
   return { model: EDIT_MODEL, input: { [EDIT_IMAGE_KEY]: imageUrl, prompt } };
 }

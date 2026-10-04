@@ -282,6 +282,15 @@ export const TOOLS: Tool[] = [
     aiNotice: 'AI edit — parts of this photo were generated.',
   },
   {
+    id: 'replace-background',
+    name: 'Replace Background',
+    category: 'background',
+    description: 'Keep the subject, swap the scene. Pick a background.',
+    intensity: false,
+    variants: ['Beach', 'Sunset', 'City Night', 'Studio', 'Forest', 'Mountains'],
+    aiNotice: 'AI edit — the background was generated.',
+  },
+  {
     id: 'blur-background',
     name: 'Blur Background',
     category: 'background',
@@ -304,6 +313,7 @@ export const FEATURED_TOOL_IDS = [
   'smooth-skin',
   'age-edit',
   'remove-background',
+  'replace-background',
   'replace-clothing',
   'iphone-natural',
 ];
