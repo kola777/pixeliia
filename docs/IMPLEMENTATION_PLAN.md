@@ -52,9 +52,12 @@ Worker (function secrets, never in the app):
 - [x] Appearance Studio: Hair Color, Makeup Look, Facial Hair, Style Preset with one-tap variants; generic `Tool.variants` + `Tool.aiNotice`; worker studio prompts. (`2537d65`)
 - [x] Analytics: offline AsyncStorage queue (500 cap, batched flush), fixed vocabulary (onboarding/photo/edit/export/auth), `app_events` (`0005`). (`ffe4298`)
 - [x] Release polish: `aiNotice` on all altering tools (body/outfit/background/cleanup), export empty state, mode-aware editor note, Home thumbnails, a11y labels, onboarding pricing transparency. (`94b9b83`)
-- [x] Plan doc: this file. (`efb9f33`)
+- [x] Plan doc: this file, plus services inventory and data flows. (`efb9f33`, `27b10af`)
+- [x] Billing fairness: ESPEE refund on failed paid exports, permission checked before charging. (`b38e3cf`)
+- [x] Web hardening: sqlite, view-shot, and media-library isolated behind platform splits (`deviceStorage`, `capturePhoto`, `gallery`); verified by loading `/`, `/export`, `/onboarding`, `/editor/auto-edit` on dev web. (`244c815`, `edaace0`)
+- [x] Brand + catalog growth: `Logo` lockup on Home/Onboarding; outfit variants (6 colors, 10 style presets, 6 replacements, featured swap to Replace Clothing); 5-look characteristic-based camera system with iPhone Natural default. (`ec10862`, `3df7aa2`)
 
-Current catalog: 33 tools across 10 categories; 6 migrations; 0 secrets in repo.
+Current catalog: 31 tools across 10 categories (7 featured); 5 migrations (`0001`–`0005`); 0 secrets in repo.
 
 ## Go-live checklist (requires owner keys — no code substitutes)
 
