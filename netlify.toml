@@ -1,0 +1,15 @@
+# Pixeliia web deploy (static Expo export).
+# Netlify: build command `npx expo export --platform web`, publish `dist`,
+# plus the two EXPO_PUBLIC_* env vars from .env.local.
+[build]
+  command = "npx expo export --platform web"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Expo Router deep links (e.g. /export, /editor/...) resolve client-side.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
