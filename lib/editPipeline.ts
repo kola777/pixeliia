@@ -18,9 +18,28 @@ import { ensureSignedIn, getSupabase, isSupabaseConfigured } from './supabase';
  */
 
 const BUCKET = 'pixeliia';
-// Matches the platform's function wall-clock budget; the worker polls
-// Replicate server-side, so the app holds one connection until it answers.
+// Every network stage gets its own tripwire. Mobile connections stall
+// silently (no error, no resolution), so an unwrapped await means an
+// endless spinner. Failures throw so the editor can offer Retry.
+// INVOKE matches the platform's function wall-clock budget; the worker
+// polls Replicate server-side, so the app holds one connection until it
+// answers.
+const UPLOAD_TIMEOUT_MS = 60_000;
+const JOB_TIMEOUT_MS = 30_000;
 const INVOKE_TIMEOUT_MS = 150_000;
+const DOWNLOAD_TIMEOUT_MS = 60_000;
+
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -63,52 +82,59 @@ async function runBackendEdit(
 
   const extension = photoUri.split('.').pop()?.split('?')[0]?.toLowerCase() === 'png' ? 'png' : 'jpg';
   const sourcePath = `uploads/${userId}/${Date.now()}.${extension}`;
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(
-    sourcePath,
-    new File(photoUri),
-    {
+  const { error: uploadError } = await withTimeout(
+    supabase.storage.from(BUCKET).upload(sourcePath, new File(photoUri), {
       contentType: extension === 'png' ? 'image/png' : 'image/jpeg',
       upsert: false,
-    }
+    }),
+    UPLOAD_TIMEOUT_MS,
+    'Upload timed out. Check your connection and try again.'
   );
   if (uploadError) {
     throw new Error(`Upload failed: ${uploadError.message}`);
   }
 
-  const { data: job, error: jobError } = await supabase
-    .from('edit_jobs')
-    .insert({
-      tool_id: toolId,
-      intensity,
-      source_path: sourcePath,
-      status: 'queued',
-      user_id: userId,
-      params,
-    })
-    .select('id')
-    .single();
+  const { data: job, error: jobError } = await withTimeout(
+    supabase
+      .from('edit_jobs')
+      .insert({
+        tool_id: toolId,
+        intensity,
+        source_path: sourcePath,
+        status: 'queued',
+        user_id: userId,
+        params,
+      })
+      .select('id')
+      .single(),
+    JOB_TIMEOUT_MS,
+    'Could not start the edit job. Try again.'
+  );
   if (jobError || !job) {
     throw new Error(`Could not start the edit job: ${jobError?.message ?? 'unknown error'}`);
   }
   const jobId = (job as { id: string }).id;
 
-  const { data, error: invokeError } = await Promise.race([
+  const { data, error: invokeError } = await withTimeout(
     supabase.functions.invoke<{
       ok: boolean;
       result_path?: string | null;
       error?: string;
     }>('process-edit-job', { body: { jobId } }),
-    delay(INVOKE_TIMEOUT_MS).then((): never => {
-      throw new Error('Edit timed out. Try again.');
-    }),
-  ]);
+    INVOKE_TIMEOUT_MS,
+    'Edit timed out. Try again.'
+  );
   if (invokeError) {
     throw new Error(`Edit worker unreachable: ${invokeError.message}`);
   }
   if (!data?.ok || !data.result_path) {
     throw new Error(data?.error || 'Edit failed. Try again.');
   }
-  return downloadResultToCache(supabase, data.result_path);
+  return withTimeout(
+    downloadResultToCache(supabase, data.result_path),
+    DOWNLOAD_TIMEOUT_MS,
+    'Download timed out. Your edit is saved — try exporting again.'
+  );
 }
 
 export async function runEdit(
