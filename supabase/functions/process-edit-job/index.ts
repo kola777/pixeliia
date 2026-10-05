@@ -181,7 +181,17 @@ function buildModelInput(
   if (operation === "inpaint") {
     return { model: INPAINT_MODEL, input: { image: imageUrl, prompt } };
   }
-  return { model: EDIT_MODEL, input: { [EDIT_IMAGE_KEY]: imageUrl, prompt } };
+  // aspect_ratio/output_format made explicit (match upstream defaults) so a
+  // future default change can't silently alter Pixeliia results.
+  return {
+    model: EDIT_MODEL,
+    input: {
+      [EDIT_IMAGE_KEY]: imageUrl,
+      prompt,
+      aspect_ratio: "match_input_image",
+      output_format: "jpg",
+    },
+  };
 }
 
 type ReplicatePrediction = {
