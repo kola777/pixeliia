@@ -250,17 +250,35 @@ async function runPrediction(
   return output;
 }
 
+// Browsers send a CORS preflight (OPTIONS) before the real POST whenever
+// custom headers (authorization, apikey, content-type) are present — which
+// supabase-js always sends. Answer it here, before any method handling,
+// or the browser blocks the worker call and jobs sit in `queued` forever.
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
+};
+
+function json(data: unknown, status = 200): Response {
+  return Response.json(data, { status, headers: CORS_HEADERS });
+}
+
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 204, headers: CORS_HEADERS });
+  }
   if (req.method !== "POST") {
-    return Response.json({ ok: false, error: "POST with { jobId } required." }, { status: 405 });
+    return json({ ok: false, error: "POST with { jobId } required." }, 405);
   }
   if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) {
-    return Response.json({ ok: false, error: "Worker misconfigured (Supabase env)." }, { status: 500 });
+    return json({ ok: false, error: "Worker misconfigured (Supabase env)." }, 500 });
   }
   if (!REPLICATE_TOKEN) {
-    return Response.json(
+    return json(
       { ok: false, error: "Worker misconfigured (REPLICATE_API_TOKEN missing)." },
-      { status: 500 },
+      500,
     );
   }
 
@@ -268,10 +286,10 @@ Deno.serve(async (req) => {
   try {
     jobId = ((await req.json()) as { jobId?: string }).jobId ?? "";
   } catch {
-    return Response.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
+    return json({ ok: false, error: "Invalid JSON body." }, 400 });
   }
   if (!jobId) {
-    return Response.json({ ok: false, error: "jobId required." }, { status: 400 });
+    return json({ ok: false, error: "jobId required." }, 400 });
   }
 
   // Identify the caller through their own JWT. Never fail-mark another
@@ -279,7 +297,7 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
   const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7) : "";
   if (!token) {
-    return Response.json({ ok: false, error: "Sign-in required." }, { status: 401 });
+    return json({ ok: false, error: "Sign-in required." }, 401 });
   }
   const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -287,14 +305,14 @@ Deno.serve(async (req) => {
   });
   const { data: userData, error: userError } = await userClient.auth.getUser();
   if (userError || !userData.user) {
-    return Response.json({ ok: false, error: "Sign-in required." }, { status: 401 });
+    return json({ ok: false, error: "Sign-in required." }, 401 });
   }
   const callerId = userData.user.id;
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
   const fail = async (message: string) => {
     await supabase.from("edit_jobs").update({ status: "failed", error: message }).eq("id", jobId);
-    return Response.json({ ok: false, error: message });
+    return json({ ok: false, error: message });
   };
 
   // Owner-scoped read: RLS only returns this caller's own rows.
@@ -304,11 +322,11 @@ Deno.serve(async (req) => {
     .eq("id", jobId)
     .single();
   if (jobError || !job) {
-    return Response.json({ ok: false, error: "Edit job not found." }, { status: 404 });
+    return json({ ok: false, error: "Edit job not found." }, 404 });
   }
   const row = job as JobRow;
   if (row.user_id && row.user_id !== callerId) {
-    return Response.json({ ok: false, error: "Not your edit job." }, { status: 403 });
+    return json({ ok: false, error: "Not your edit job." }, 403 });
   }
   if (row.status === "succeeded") {
     const { data: done } = await userClient
@@ -316,7 +334,7 @@ Deno.serve(async (req) => {
       .select("result_path")
       .eq("id", jobId)
       .single();
-    return Response.json({ ok: true, result_path: (done as { result_path: string } | null)?.result_path ?? null });
+    return json({ ok: true, result_path: (done as { result_path: string } | null)?.result_path ?? null });
   }
   if (row.status !== "queued") return await fail("Edit job is already being processed.");
 
@@ -328,7 +346,7 @@ Deno.serve(async (req) => {
     .eq("status", "queued")
     .select("id");
   if (!claimed || (claimed as unknown[]).length === 0) {
-    return Response.json({ ok: false, error: "Edit job already claimed." }, { status: 409 });
+    return json({ ok: false, error: "Edit job already claimed." }, 409 });
   }
 
   try {
@@ -364,7 +382,7 @@ Deno.serve(async (req) => {
       .from("edit_jobs")
       .update({ status: "succeeded", result_path: resultPath, error: null })
       .eq("id", jobId);
-    return Response.json({ ok: true, result_path: resultPath });
+    return json({ ok: true, result_path: resultPath });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Edit failed. Try again.";
     return await fail(message.slice(0, 500));
