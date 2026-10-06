@@ -1,5 +1,6 @@
 import { File, Paths } from 'expo-file-system';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
 import { track } from './analytics';
 import { ensureSignedIn, getSupabase, isSupabaseConfigured } from './supabase';
@@ -53,9 +54,39 @@ async function downloadResultToCache(
   if (error || !data?.signedUrl) {
     throw new Error(`Could not fetch the edited photo: ${error?.message ?? 'unknown error'}`);
   }
+  if (Platform.OS === 'web') {
+    // No app cache on web: keep the bytes as a session object URL instead.
+    const response = await fetch(data.signedUrl);
+    if (!response.ok) {
+      throw new Error('Could not download the edited photo.');
+    }
+    const blob = await response.blob();
+    const createObjectURL = (URL as unknown as {
+      createObjectURL?: (blob: unknown) => string;
+    }).createObjectURL;
+    if (typeof createObjectURL !== 'function') {
+      throw new Error('This browser cannot hold the edited photo.');
+    }
+    return createObjectURL.call(URL, blob);
+  }
   const destination = new File(Paths.cache, `pixeliia-result-${Date.now()}.jpg`);
   const downloaded = await File.downloadFileAsync(data.signedUrl, destination);
   return downloaded.uri;
+}
+
+/**
+ * Native uploads stream the file straight from disk. Web has no filesystem
+ * access, so the photo URI (blob:/data:/https:) is fetched into a Blob.
+ */
+async function readUploadBody(photoUri: string): Promise<Blob> {
+  if (Platform.OS === 'web') {
+    const response = await fetch(photoUri);
+    if (!response.ok) {
+      throw new Error('Could not read the photo for upload.');
+    }
+    return response.blob();
+  }
+  return new File(photoUri);
 }
 
 export type EditParams = {
@@ -82,8 +113,9 @@ async function runBackendEdit(
 
   const extension = photoUri.split('.').pop()?.split('?')[0]?.toLowerCase() === 'png' ? 'png' : 'jpg';
   const sourcePath = `uploads/${userId}/${Date.now()}.${extension}`;
+  const uploadBody = await readUploadBody(photoUri);
   const { error: uploadError } = await withTimeout(
-    supabase.storage.from(BUCKET).upload(sourcePath, new File(photoUri), {
+    supabase.storage.from(BUCKET).upload(sourcePath, uploadBody, {
       contentType: extension === 'png' ? 'image/png' : 'image/jpeg',
       upsert: false,
     }),
