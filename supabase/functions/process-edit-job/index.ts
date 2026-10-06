@@ -273,7 +273,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "POST with { jobId } required." }, 405);
   }
   if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) {
-    return json({ ok: false, error: "Worker misconfigured (Supabase env)." }, 500 });
+    return json({ ok: false, error: "Worker misconfigured (Supabase env)." }, 500);
   }
   if (!REPLICATE_TOKEN) {
     return json(
@@ -286,10 +286,10 @@ Deno.serve(async (req) => {
   try {
     jobId = ((await req.json()) as { jobId?: string }).jobId ?? "";
   } catch {
-    return json({ ok: false, error: "Invalid JSON body." }, 400 });
+    return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
   if (!jobId) {
-    return json({ ok: false, error: "jobId required." }, 400 });
+    return json({ ok: false, error: "jobId required." }, 400);
   }
 
   // Identify the caller through their own JWT. Never fail-mark another
@@ -297,7 +297,7 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
   const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7) : "";
   if (!token) {
-    return json({ ok: false, error: "Sign-in required." }, 401 });
+    return json({ ok: false, error: "Sign-in required." }, 401);
   }
   const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -305,7 +305,7 @@ Deno.serve(async (req) => {
   });
   const { data: userData, error: userError } = await userClient.auth.getUser();
   if (userError || !userData.user) {
-    return json({ ok: false, error: "Sign-in required." }, 401 });
+    return json({ ok: false, error: "Sign-in required." }, 401);
   }
   const callerId = userData.user.id;
 
@@ -322,11 +322,11 @@ Deno.serve(async (req) => {
     .eq("id", jobId)
     .single();
   if (jobError || !job) {
-    return json({ ok: false, error: "Edit job not found." }, 404 });
+    return json({ ok: false, error: "Edit job not found." }, 404);
   }
   const row = job as JobRow;
   if (row.user_id && row.user_id !== callerId) {
-    return json({ ok: false, error: "Not your edit job." }, 403 });
+    return json({ ok: false, error: "Not your edit job." }, 403);
   }
   if (row.status === "succeeded") {
     const { data: done } = await userClient
@@ -346,7 +346,7 @@ Deno.serve(async (req) => {
     .eq("status", "queued")
     .select("id");
   if (!claimed || (claimed as unknown[]).length === 0) {
-    return json({ ok: false, error: "Edit job already claimed." }, 409 });
+    return json({ ok: false, error: "Edit job already claimed." }, 409);
   }
 
   try {
