@@ -1,6 +1,9 @@
 # Pixeliia Supabase config.
-# The app invokes process-edit-job with the caller's session JWT; the
-# gateway validates it and the function additionally scopes every job read
-# through RLS. The Replicate token stays server-side.
+# verify_jwt stays FALSE on purpose: the gateway rejects auth-less CORS
+# preflights before functions run, which would block every browser call.
+# Authentication is enforced inside the function instead — missing/invalid
+# JWTs get 401, and every job read goes through RLS-scoped queries, so a
+# caller can only ever touch their own rows. The Replicate token stays
+# server-side.
 [functions.process-edit-job]
-verify_jwt = true
+verify_jwt = false
