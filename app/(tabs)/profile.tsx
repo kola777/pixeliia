@@ -23,7 +23,7 @@ const ROWS = [
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { balance, ledger } = useEditor();
+  const { balance, ledger, syncWallet } = useEditor();
   const [account, setAccount] = useState<AccountInfo | null>(null);
   const [accountLoading, setAccountLoading] = useState(true);
 
@@ -33,7 +33,8 @@ export default function ProfileScreen() {
       .then(setAccount)
       .catch(() => {})
       .finally(() => setAccountLoading(false));
-  }, []);
+    void syncWallet();
+  }, [syncWallet]);
 
   useFocusEffect(reloadAccount);
 

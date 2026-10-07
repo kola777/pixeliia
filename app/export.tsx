@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -19,6 +19,7 @@ import { useEditor } from '@/context/EditorContext';
 import { track } from '@/lib/analytics';
 import { captureComposition } from '@/lib/capturePhoto';
 import { requestGalleryAccess, saveToGallery } from '@/lib/gallery';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 const PREVIEW_HEIGHT = 360;
 const HD_MAX_EDGE = 2048;
@@ -42,14 +43,34 @@ export default function ExportScreen() {
   const router = useRouter();
   const { toolId } = useLocalSearchParams<{ toolId?: string }>();
   const tool = toolById(toolId ?? '');
-  const { photoUri, resultUri, balance, spend, refund, grantTestEspee, saveProject } = useEditor();
+  const {
+    photoUri,
+    resultUri,
+    balance,
+    spend,
+    refund,
+    grantTestEspee,
+    claimDaily,
+    syncWallet,
+    saveProject,
+  } = useEditor();
   const { width: windowWidth } = useWindowDimensions();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const compositionRef = useRef<View>(null);
+  const purchaseCounter = useRef(0);
+
+  useEffect(() => {
+    void syncWallet();
+  }, [syncWallet]);
 
   const sourceUri = resultUri ?? photoUri;
   const previewWidth = Math.round(windowWidth - space.md * 2);
+
+  function nextRefId(kind: string) {
+    purchaseCounter.current += 1;
+    return `${kind}-${purchaseCounter.current}`;
+  }
 
   async function ensureGalleryPermission() {
     const granted = await requestGalleryAccess();
@@ -72,7 +93,26 @@ export default function ExportScreen() {
     router.push('/(tabs)/photos');
   }
 
-  function offerTestTopUp() {
+  function offerTopUp() {
+    if (isSupabaseConfigured()) {
+      Alert.alert('Not enough ESPEE', `Balance: ${balance} ESPEE. Claim your free daily grant.`, [
+        {
+          text: 'Claim 2 daily ESPEE',
+          onPress: () => {
+            void claimDaily().then((ok) => {
+              Alert.alert(
+                ok ? 'Granted' : 'Already claimed',
+                ok
+                  ? '2 ESPEE added. Enjoy your export.'
+                  : 'Today\u2019s grant is already claimed. Come back tomorrow.'
+              );
+            });
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
     Alert.alert('Not enough ESPEE', `Balance: ${balance} ESPEE. Real billing is not connected yet.`, [
       { text: 'Add 10 test ESPEE', onPress: grantTestEspee },
       { text: 'Cancel', style: 'cancel' },
@@ -118,8 +158,9 @@ export default function ExportScreen() {
       return;
     }
     if (!(await ensureGalleryPermission())) return;
-    if (!spend(2, 'HD Download')) {
-      offerTestTopUp();
+    const refId = nextRefId('hd');
+    if (!(await spend(2, 'HD Download', refId))) {
+      offerTopUp();
       return;
     }
     setBusy(true);
@@ -136,11 +177,18 @@ export default function ExportScreen() {
       track('export_completed', { option: 'hd', paid: true, cost: 2 });
       finishExport(`HD download (${target.width}×${target.height}) with Pixeliia watermark. 2 ESPEE charged.`);
     } catch (err) {
-      refund(2, 'HD Download');
-      Alert.alert(
-        'Save failed',
-        `${err instanceof Error ? err.message : 'Could not save to the gallery.'} Your 2 ESPEE were refunded.`
-      );
+      try {
+        await refund(2, 'HD Download', refId);
+        Alert.alert(
+          'Save failed',
+          `${err instanceof Error ? err.message : 'Could not save to the gallery.'} Your 2 ESPEE were refunded.`
+        );
+      } catch {
+        Alert.alert(
+          'Save failed',
+          'Could not save, and the automatic refund failed too. Your ledger keeps both entries — nothing is hidden.'
+        );
+      }
     } finally {
       setBusy(false);
       setStatus(null);
@@ -153,8 +201,9 @@ export default function ExportScreen() {
       return;
     }
     if (!(await ensureGalleryPermission())) return;
-    if (!spend(1, 'Remove Pixeliia Watermark')) {
-      offerTestTopUp();
+    const refId = nextRefId('clean');
+    if (!(await spend(1, 'Remove Pixeliia Watermark', refId))) {
+      offerTopUp();
       return;
     }
     setBusy(true);
@@ -164,8 +213,15 @@ export default function ExportScreen() {
       track('export_completed', { option: 'remove-watermark', paid: true, cost: 1 });
       finishExport('Clean export without the Pixeliia mark. 1 ESPEE charged.');
     } catch {
-      refund(1, 'Remove Pixeliia Watermark');
-      Alert.alert('Save failed', 'Could not save to the gallery. Your 1 ESPEE was refunded.');
+      try {
+        await refund(1, 'Remove Pixeliia Watermark', refId);
+        Alert.alert('Save failed', 'Could not save to the gallery. Your 1 ESPEE was refunded.');
+      } catch {
+        Alert.alert(
+          'Save failed',
+          'Could not save, and the automatic refund failed too. Your ledger keeps both entries — nothing is hidden.'
+        );
+      }
     } finally {
       setBusy(false);
       setStatus(null);

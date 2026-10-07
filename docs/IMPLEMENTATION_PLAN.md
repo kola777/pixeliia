@@ -69,8 +69,8 @@ Current catalog: 31 tools across 10 categories (7 featured); 5 migrations (`0001
 
 ## Later code (ordered by value once live)
 
-- [ ] Tool quality pass: per-tool prompt tuning from real outputs; intensity calibration; ESPEE refund on worker failure.
-- [ ] Server-side ESPEE billing: ledger tables replace the test ledger; remove test top-up.
+- [ ] Tool quality pass: per-tool prompt tuning from real outputs; intensity calibration.
+- [ ] Billing follow-ups: admin grant tooling, ESPEE purchase rails if fiat is ever wanted (currently grants-only by design).
 - [ ] Advertiser side: campaign dashboard, analytics aggregates, automated billing, billboard exclusivity enforcement.
 - [ ] Long-tail tools: external watermark removal, phone/camera watermark library, extra camera looks/backgrounds/lighting.
 - [ ] Release hardening: job retention/cleanup, storage lifecycle, mid-range Android performance pass, thumbnail caching.

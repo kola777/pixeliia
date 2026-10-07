@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from 'react';
 
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+
 export type Project = {
   id: string;
   toolId: string;
@@ -40,12 +42,22 @@ type EditorContextValue = {
   setIntensity: (value: number) => void;
   saveProject: (toolId: string, toolName: string) => void;
   openProject: (id: string) => void;
-  /** Deducts ESPEE and records the purchase. Returns false when funds are short. */
-  spend: (amount: number, label: string) => boolean;
-  /** Returns ESPEE for a purchase that failed after charging. Never fails. */
-  refund: (amount: number, label: string) => void;
-  /** Clearly-labeled test grant until real billing lands. */
+  /**
+   * Deducts ESPEE. Server-backed when configured (atomic RPC), local
+   * otherwise. Returns false when funds are short or billing is unreachable.
+   */
+  spend: (amount: number, label: string, refId?: string) => Promise<boolean>;
+  /**
+   * Returns ESPEE for a purchase that failed after charging. Throws when the
+   * refund itself cannot be recorded, so callers can say so honestly.
+   */
+  refund: (amount: number, label: string, refId?: string) => Promise<void>;
+  /** Local-mode test grant. Never offered when the server ledger is live. */
   grantTestEspee: () => void;
+  /** Refresh balance + history from the server ledger. No-op in local mode. */
+  syncWallet: () => Promise<void>;
+  /** Once-daily +2 ESPEE grant. Returns true when coins were actually added. */
+  claimDaily: () => Promise<boolean>;
 };
 
 const PROJECTS_KEY = 'pixeliia:projects:v1';
@@ -192,32 +204,110 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     [projects]
   );
 
+  const syncWallet = useCallback(async () => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const sb = getSupabase();
+      if (!sb) return;
+      await sb.rpc('claim_welcome_grant');
+      const [{ data: balanceData }, { data: rows }] = await Promise.all([
+        sb.rpc('espee_balance'),
+        sb
+          .from('espee_ledger')
+          .select('id,delta,reason,created_at')
+          .order('created_at', { ascending: false })
+          .limit(50),
+      ]);
+      if (typeof balanceData === 'number') {
+        setBalance(balanceData);
+      }
+      if (Array.isArray(rows)) {
+        setLedger(
+          (
+            rows as {
+              id: string;
+              delta: number;
+              reason: string;
+              created_at: string;
+            }[]
+          ).map((row) => ({
+            id: row.id,
+            label: row.reason,
+            delta: row.delta,
+            createdAt: new Date(row.created_at).getTime(),
+          }))
+        );
+      }
+    } catch {
+      // Offline or backend down: keep last known state.
+    }
+  }, []);
+
   const spend = useCallback(
-    (amount: number, label: string) => {
+    async (amount: number, label: string, refId?: string) => {
       if (amount <= 0) return true;
-      if (balance < amount) return false;
-      setBalance(balance - amount);
-      setLedger((current) =>
-        [{ id: `${Date.now()}`, label, delta: -amount, createdAt: Date.now() }, ...current].slice(
-          0,
-          50
-        )
-      );
-      return true;
+      if (!isSupabaseConfigured()) {
+        if (balance < amount) return false;
+        setBalance(balance - amount);
+        setLedger((current) =>
+          [{ id: `${Date.now()}`, label, delta: -amount, createdAt: Date.now() }, ...current].slice(
+            0,
+            50
+          )
+        );
+        return true;
+      }
+      try {
+        const sb = getSupabase();
+        if (!sb) return false;
+        const { data, error } = await sb.rpc('spend_espee', {
+          p_amount: amount,
+          p_reason: label,
+          p_ref_id: refId ?? null,
+        });
+        await syncWallet();
+        const res = data as { ok: boolean } | null;
+        return !error && !!res?.ok;
+      } catch {
+        return false;
+      }
     },
-    [balance]
+    [balance, syncWallet]
   );
 
-  const refund = useCallback((amount: number, label: string) => {
-    if (amount <= 0) return;
-    setBalance((current) => current + amount);
-    setLedger((current) =>
-      [
-        { id: `${Date.now()}`, label: `Refund: ${label}`, delta: amount, createdAt: Date.now() },
-        ...current,
-      ].slice(0, 50)
-    );
-  }, []);
+  const refund = useCallback(
+    async (amount: number, label: string, refId?: string) => {
+      if (amount <= 0) return;
+      if (!isSupabaseConfigured()) {
+        setBalance((current) => current + amount);
+        setLedger((current) =>
+          [
+            {
+              id: `${Date.now()}`,
+              label: `Refund: ${label}`,
+              delta: amount,
+              createdAt: Date.now(),
+            },
+            ...current,
+          ].slice(0, 50)
+        );
+        return;
+      }
+      const sb = getSupabase();
+      if (!sb) throw new Error('Billing is unreachable right now.');
+      const { data, error } = await sb.rpc('refund_espee', {
+        p_amount: amount,
+        p_reason: label,
+        p_ref_id: refId ?? null,
+      });
+      const res = data as { ok: boolean; error?: string } | null;
+      if (error || !res?.ok) {
+        throw new Error(res?.error || 'Refund could not be recorded.');
+      }
+      await syncWallet();
+    },
+    [syncWallet]
+  );
 
   const grantTestEspee = useCallback(() => {
     setBalance((current) => current + TEST_GRANT);
@@ -228,6 +318,20 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       ].slice(0, 50)
     );
   }, []);
+
+  const claimDaily = useCallback(async () => {
+    if (!isSupabaseConfigured()) return false;
+    try {
+      const sb = getSupabase();
+      if (!sb) return false;
+      const { data, error } = await sb.rpc('claim_daily_grant');
+      await syncWallet();
+      const res = data as { ok: boolean } | null;
+      return !error && !!res?.ok;
+    } catch {
+      return false;
+    }
+  }, [syncWallet]);
 
   const value = useMemo(
     () => ({
@@ -246,6 +350,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       spend,
       refund,
       grantTestEspee,
+      syncWallet,
+      claimDaily,
     }),
     [
       photoUri,
@@ -262,6 +368,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       spend,
       refund,
       grantTestEspee,
+      syncWallet,
+      claimDaily,
     ]
   );
 
