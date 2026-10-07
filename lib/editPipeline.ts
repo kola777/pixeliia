@@ -46,6 +46,28 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * After an invoke timeout the worker is often still running (cold boot).
+ * Re-check the SAME job briefly before giving up, so a retry doesn't pay
+ * for a second GPU run of work already in flight.
+ */
+async function pollSameJob(supabase: SupabaseClient, jobId: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await delay(20000);
+    const { data, error } = await supabase
+      .from('edit_jobs')
+      .select('status,result_path,error')
+      .eq('id', jobId)
+      .maybeSingle();
+    if (!error && data) {
+      const row = data as { status: string; result_path: string | null; error: string | null };
+      if (row.status === 'succeeded' && row.result_path) return row.result_path;
+      if (row.status === 'failed') throw new Error(row.error || 'Edit failed. Try again.');
+    }
+  }
+  return null;
+}
+
 async function downloadResultToCache(
   supabase: SupabaseClient,
   resultPath: string
@@ -147,23 +169,38 @@ async function runBackendEdit(
   }
   const jobId = (job as { id: string }).id;
 
-  const { data, error: invokeError } = await withTimeout(
-    supabase.functions.invoke<{
-      ok: boolean;
-      result_path?: string | null;
-      error?: string;
-    }>('process-edit-job', { body: { jobId } }),
-    INVOKE_TIMEOUT_MS,
-    'Edit timed out. Try again.'
-  );
-  if (invokeError) {
-    throw new Error(`Edit worker unreachable: ${invokeError.message}`);
-  }
-  if (!data?.ok || !data.result_path) {
-    throw new Error(data?.error || 'Edit failed. Try again.');
+  let resultPath: string;
+  try {
+    const { data, error: invokeError } = await withTimeout(
+      supabase.functions.invoke<{
+        ok: boolean;
+        result_path?: string | null;
+        error?: string;
+      }>('process-edit-job', { body: { jobId } }),
+      INVOKE_TIMEOUT_MS,
+      'Edit timed out. Try again.'
+    );
+    if (invokeError) {
+      throw new Error(`Edit worker unreachable: ${invokeError.message}`);
+    }
+    if (!data?.ok || !data.result_path) {
+      throw new Error(data?.error || 'Edit failed. Try again.');
+    }
+    resultPath = data.result_path;
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Edit timed out. Try again.') {
+      const resumed = await pollSameJob(supabase, jobId);
+      if (resumed) {
+        resultPath = resumed;
+      } else {
+        throw err;
+      }
+    } else {
+      throw err;
+    }
   }
   return withTimeout(
-    downloadResultToCache(supabase, data.result_path),
+    downloadResultToCache(supabase, resultPath),
     DOWNLOAD_TIMEOUT_MS,
     'Download timed out. Your edit is saved — try exporting again.'
   );

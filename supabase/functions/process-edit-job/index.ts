@@ -10,11 +10,10 @@
 //             REPLICATE_EDIT_MODEL=black-forest-labs/flux-kontext-pro \
 //             REPLICATE_UPSCALE_MODEL=nightmareai/real-esrgan \
 //             REPLICATE_BG_MODEL=cjwbw/rembg
-// Invoke auth: verify_jwt is true in supabase/config.toml and the function
-// additionally loads the job through the caller's own JWT, so row-level
-// security limits every caller to their own jobs. Service-role access is
-// used only for status updates and result storage; the Replicate token
-// never leaves the server.
+// Invoke auth: verify_jwt is false (gateway would reject browser CORS
+// preflights) and the function verifies the caller JWT itself, scoping
+// every job read through RLS. Service-role access is used only for status
+// updates and result storage; the Replicate token never leaves the server.
 //
 // Model slugs and input keys below are best-known defaults. Before first
 // production use, open each model's API tab on replicate.com and confirm the
@@ -71,7 +70,8 @@ const TOOL_PROMPTS: Record<string, string> = {
   "reduce-dark-circles": "Reduce under-eye dark circles while keeping a natural look",
   "teeth-whitening": "Whiten teeth slightly without a fake glow",
   "eye-enhance": "Subtly brighten and clarify the eyes",
-  "face-enhance": "Natural face quality pass preserving facial structure, hair and identity",
+  // NOTE: face-enhance routes to the dedicated restore model, which takes
+  // no prompt — do not add a prompt entry here, it would be dead code.
   slimmer: "Make the body subtly slimmer without warping the background",
   "more-athletic": "Make the build slightly more athletic while keeping pose and clothing",
   "adjust-waist": "Subtly adjust the waist while preserving identity and background",
@@ -365,7 +365,10 @@ Deno.serve(async (req) => {
     );
     const outputUrl = await runPrediction(model, input);
 
-    const outputRes = await fetch(outputUrl);
+    // Replicate serves output files only with an Authorization header.
+    const outputRes = await fetch(outputUrl, {
+      headers: { Authorization: `Bearer ${REPLICATE_TOKEN}` },
+    });
     if (!outputRes.ok) throw new Error("Could not download the AI result.");
     const bytes = new Uint8Array(await outputRes.arrayBuffer());
     const contentType = outputRes.headers.get("content-type") ?? "image/png";
