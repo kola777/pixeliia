@@ -20,10 +20,10 @@ export const EXPORT_OPTIONS: ExportOption[] = [
   {
     id: 'hd',
     name: 'HD Download',
-    priceLabel: '2 ESPEE',
+    priceLabel: '1 ESPEE',
     hint: 'Higher-resolution export',
     mvp: true,
-    cost: 2,
+    cost: 1,
   },
   {
     id: 'remove-pixeliia-watermark',
@@ -44,9 +44,9 @@ export const EXPORT_OPTIONS: ExportOption[] = [
   {
     id: 'remove-external-watermark',
     name: 'Remove External Watermark',
-    priceLabel: '3 ESPEE',
+    priceLabel: '1 ESPEE',
     hint: 'Coming in a later release · for photos you own',
     mvp: false,
-    cost: 3,
+    cost: 1,
   },
 ];

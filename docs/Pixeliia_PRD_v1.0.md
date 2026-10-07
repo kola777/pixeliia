@@ -159,10 +159,10 @@ Watermark removal should be presented for images the user owns or has permission
 
 ### 7.12 Export & Watermark Options
 - Standard Download — free and includes Pixeliia watermark.
-- HD Download — 2 ESPEE.
+- HD Download — 1 ESPEE.
 - Remove Pixeliia Watermark — 1 ESPEE.
 - Add Phone/Camera Watermark — 1 ESPEE.
-- Remove External/Third-Party Watermark — 3 ESPEE.
+- Remove External/Third-Party Watermark — 1 ESPEE.
 These prices are the current product assumptions and can be changed later without redesigning the editor.
 
 ## 8. Advertising Product

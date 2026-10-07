@@ -159,7 +159,7 @@ export default function ExportScreen() {
     }
     if (!(await ensureGalleryPermission())) return;
     const refId = nextRefId('hd');
-    if (!(await spend(2, 'HD Download', refId))) {
+    if (!(await spend(1, 'HD Download', refId))) {
       offerTopUp();
       return;
     }
@@ -174,14 +174,14 @@ export default function ExportScreen() {
         height: target.height,
       });
       await saveFile(fileUri);
-      track('export_completed', { option: 'hd', paid: true, cost: 2 });
-      finishExport(`HD download (${target.width}×${target.height}) with Pixeliia watermark. 2 ESPEE charged.`);
+      track('export_completed', { option: 'hd', paid: true, cost: 1 });
+      finishExport(`HD download (${target.width}×${target.height}) with Pixeliia watermark. 1 ESPEE charged.`);
     } catch (err) {
       try {
-        await refund(2, 'HD Download', refId);
+        await refund(1, 'HD Download', refId);
         Alert.alert(
           'Save failed',
-          `${err instanceof Error ? err.message : 'Could not save to the gallery.'} Your 2 ESPEE were refunded.`
+          `${err instanceof Error ? err.message : 'Could not save to the gallery.'} Your 1 ESPEE was refunded.`
         );
       } catch {
         Alert.alert(
