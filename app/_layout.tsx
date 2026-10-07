@@ -35,6 +35,7 @@ export default function RootLayout() {
         }}>
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="auth" options={{ title: 'Sign in' }} />
+        <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="editor/[toolId]" options={{ title: 'Edit' }} />
         <Stack.Screen name="export" options={{ title: 'Export' }} />

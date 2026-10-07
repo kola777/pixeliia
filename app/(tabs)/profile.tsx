@@ -90,12 +90,25 @@ export default function ProfileScreen() {
     <AppScreen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.headline}>Profile</Text>
-        {rows.map((row) => (
-          <View key={row.title} style={styles.card}>
-            <Text style={styles.title}>{row.title}</Text>
-            <Text style={styles.body}>{row.body}</Text>
-          </View>
-        ))}
+        {rows.map((row) =>
+          row.title === 'Privacy' ? (
+            <Pressable
+              key={row.title}
+              accessibilityRole="button"
+              accessibilityLabel="Read the full privacy notice"
+              onPress={() => router.push('/privacy')}
+              style={styles.card}>
+              <Text style={styles.title}>{row.title}</Text>
+              <Text style={styles.body}>{row.body}</Text>
+              <Text style={styles.linkLabel}>Read full notice →</Text>
+            </Pressable>
+          ) : (
+            <View key={row.title} style={styles.card}>
+              <Text style={styles.title}>{row.title}</Text>
+              <Text style={styles.body}>{row.body}</Text>
+            </View>
+          )
+        )}
         {isSupabaseConfigured() && account && !account.email ? (
           <Pressable
             accessibilityRole="button"

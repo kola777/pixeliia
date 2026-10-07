@@ -8,9 +8,11 @@
     "scheme": "pixeliia",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pixeliia.app"
     },
     "android": {
+      "package": "com.pixeliia.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
