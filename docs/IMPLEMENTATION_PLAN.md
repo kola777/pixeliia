@@ -59,6 +59,10 @@ Worker (function secrets, never in the app):
 
 Current catalog: 31 tools across 10 categories (7 featured); 5 migrations (`0001`–`0005`); 0 secrets in repo.
 
+## Release v1.0.0
+
+First releasable cut: full MVP scope (PRD section 16) plus Age, Appearance Studio, ads serving, analytics, guardrails, PWA, and EAS/Netlify configs. Tagged `v1.0.0`. Known unverified-at-tag-time item: end-to-end AI edit on a physical device (see test script below). Post-v1.0 work (tuning, server billing follow-ups, advertiser dashboard) proceeds only on live evidence.
+
 ## Go-live checklist (requires owner keys — no code substitutes)
 
 - [ ] Create Supabase project, enable Anonymous sign-ins (Dashboard → Authentication → Sign-In).
