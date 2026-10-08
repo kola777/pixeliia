@@ -72,7 +72,9 @@ function firstHttpUrl(output: unknown): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 204, headers: CORS_HEADERS });
+    // NOTE: 204 must carry a null body — any body string throws per the
+    // Fetch spec and the runtime answers 500 instead.
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
   if (req.method !== "POST") {
     return json({ ok: false, error: "POST with { jobId } required." }, 405);
