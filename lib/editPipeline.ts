@@ -27,11 +27,15 @@ const BUCKET = 'pixeliia';
 // answers.
 const UPLOAD_TIMEOUT_MS = 60_000;
 const JOB_TIMEOUT_MS = 30_000;
-const INVOKE_TIMEOUT_MS = 150_000;
+// Starting the worker must answer fast: it only creates the prediction.
+const WORKER_START_TIMEOUT_MS = 30_000;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
-// Backstop over the whole backend path (sign-in, upload, job, worker,
-// resume polls, download): no single stall may ever outlive this.
-const OVERALL_TIMEOUT_MS = 300_000;
+// Status polling rhythm: one short call every few seconds, never hammering.
+const STATUS_POLL_MS = 4000;
+const STATUS_CALL_TIMEOUT_MS = 25_000;
+const STATUS_TIMEOUT_MS = 240_000;
+// Backstop over the whole backend path: no stall may ever outlive this.
+const OVERALL_TIMEOUT_MS = 420_000;
 
 async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -47,28 +51,6 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: stri
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * After an invoke timeout the worker is often still running (cold boot).
- * Re-check the SAME job briefly before giving up, so a retry doesn't pay
- * for a second GPU run of work already in flight.
- */
-async function pollSameJob(supabase: SupabaseClient, jobId: string): Promise<string | null> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    await delay(20000);
-    const { data, error } = await supabase
-      .from('edit_jobs')
-      .select('status,result_path,error')
-      .eq('id', jobId)
-      .maybeSingle();
-    if (!error && data) {
-      const row = data as { status: string; result_path: string | null; error: string | null };
-      if (row.status === 'succeeded' && row.result_path) return row.result_path;
-      if (row.status === 'failed') throw new Error(row.error || 'Edit failed. Try again.');
-    }
-  }
-  return null;
 }
 
 async function downloadResultToCache(
@@ -172,41 +154,65 @@ async function runBackendEdit(
   }
   const jobId = (job as { id: string }).id;
 
-  let resultPath: string;
-  try {
-    const { data, error: invokeError } = await withTimeout(
-      supabase.functions.invoke<{
-        ok: boolean;
-        result_path?: string | null;
-        error?: string;
-      }>('process-edit-job', { body: { jobId } }),
-      INVOKE_TIMEOUT_MS,
-      'Edit timed out. Try again.'
-    );
-    if (invokeError) {
-      throw new Error(`Edit worker unreachable: ${invokeError.message}`);
+  // Fire: the worker only creates the prediction and returns fast.
+  const { data: started, error: startError } = await withTimeout(
+    supabase.functions.invoke<{
+      ok: boolean;
+      job_id?: string;
+      prediction_id?: string;
+      error?: string;
+    }>('process-edit-job', { body: { jobId } }),
+    WORKER_START_TIMEOUT_MS,
+    'Could not start the edit. Try again.'
+  );
+  if (startError) {
+    throw new Error(`Edit worker unreachable: ${startError.message}`);
+  }
+  if (!started?.ok) {
+    throw new Error(started?.error || 'Edit failed. Try again.');
+  }
+
+  // Poll the status function until terminal. Each call is short; a missed
+  // beat simply retries on the next tick. No single long-lived request.
+  const pollingSince = Date.now();
+  for (;;) {
+    if (Date.now() - pollingSince > STATUS_TIMEOUT_MS) {
+      throw new Error('Edit is taking too long. Try again.');
     }
-    if (!data?.ok || !data.result_path) {
-      throw new Error(data?.error || 'Edit failed. Try again.');
+    await delay(STATUS_POLL_MS);
+    let state: {
+      ok: boolean;
+      status?: string;
+      result_path?: string | null;
+      error?: string;
+    } | null = null;
+    try {
+      const { data, error } = await withTimeout(
+        supabase.functions.invoke<{
+          ok: boolean;
+          status?: string;
+          result_path?: string | null;
+          error?: string;
+        }>('process-edit-status', { body: { jobId } }),
+        STATUS_CALL_TIMEOUT_MS,
+        'status check timed out'
+      );
+      if (!error) state = data;
+    } catch {
+      // Transient: keep polling on the next tick.
     }
-    resultPath = data.result_path;
-  } catch (err) {
-    if (err instanceof Error && err.message === 'Edit timed out. Try again.') {
-      const resumed = await pollSameJob(supabase, jobId);
-      if (resumed) {
-        resultPath = resumed;
-      } else {
-        throw err;
-      }
-    } else {
-      throw err;
+    if (!state?.ok) continue;
+    if (state.status === 'succeeded' && state.result_path) {
+      return withTimeout(
+        downloadResultToCache(supabase, state.result_path),
+        DOWNLOAD_TIMEOUT_MS,
+        'Download timed out. Your edit is saved — try exporting again.'
+      );
+    }
+    if (state.status === 'failed') {
+      throw new Error(state.error || 'Edit failed. Try again.');
     }
   }
-  return withTimeout(
-    downloadResultToCache(supabase, resultPath),
-    DOWNLOAD_TIMEOUT_MS,
-    'Download timed out. Your edit is saved — try exporting again.'
-  );
 }
 
 export async function runEdit(

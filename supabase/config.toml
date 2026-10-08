@@ -7,3 +7,6 @@
 # server-side.
 [functions.process-edit-job]
 verify_jwt = false
+
+[functions.process-edit-status]
+verify_jwt = false

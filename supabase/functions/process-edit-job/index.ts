@@ -1,9 +1,10 @@
-// Pixeliia Phase 4: AI edit worker (Supabase Edge Function, Deno).
+// Pixeliia edit worker, part 1 of 2 (Supabase Edge Function, Deno).
 //
-// Flow: client uploads source -> inserts edit_jobs row (status queued) ->
-// invokes this function with { jobId } -> worker claims the job, runs the
-// Replicate model for the tool, stores the result in the private `pixeliia`
-// bucket and marks the job succeeded/failed. The client awaits this response.
+// Async flow: client uploads source -> inserts edit_jobs row (queued) ->
+// invokes this function -> it claims the job, CREATES the Replicate
+// prediction, stores replicate_prediction_id, marks processing and returns
+// FAST. It never waits for the model. Part 2 (process-edit-status, polled
+// by the client) advances and finalizes the job.
 //
 // Deploy:  supabase functions deploy process-edit-job
 // Secrets:  supabase secrets set REPLICATE_API_TOKEN=r8_... \
@@ -42,8 +43,6 @@ const INPAINT_MODEL = Deno.env.get("REPLICATE_INPAINT_MODEL") ?? "";
 const EDIT_IMAGE_KEY = Deno.env.get("REPLICATE_EDIT_IMAGE_KEY") ?? "input_image";
 
 const BUCKET = "pixeliia";
-const REPLICATE_POLL_MS = 3000;
-const REPLICATE_TIMEOUT_MS = 8 * 60 * 1000;
 
 type JobRow = {
   id: string;
@@ -217,7 +216,11 @@ async function replicateFetch(path: string, init?: RequestInit): Promise<Respons
   return response;
 }
 
-async function runPrediction(
+/**
+ * Creates the Replicate prediction and returns immediately with its id.
+ * Never waits for the model — process-edit-status advances the job.
+ */
+async function createPrediction(
   model: string,
   input: Record<string, unknown>,
 ): Promise<string> {
@@ -225,29 +228,12 @@ async function runPrediction(
   if (!owner || !name) throw new Error(`Bad model slug: ${model}`);
   const created = (await (await replicateFetch(`/models/${owner}/${name}/predictions`, {
     method: "POST",
-    headers: { Prefer: "wait=60" },
     body: JSON.stringify({ input }),
   })).json()) as ReplicatePrediction;
-
-  let prediction = created;
-  const startedAt = Date.now();
-  while (prediction.status === "starting" || prediction.status === "processing") {
-    if (Date.now() - startedAt > REPLICATE_TIMEOUT_MS) {
-      throw new Error("AI model timed out. Try again.");
-    }
-    await new Promise((resolve) => setTimeout(resolve, REPLICATE_POLL_MS));
-    prediction = (await (await replicateFetch(`/predictions/${prediction.id}`)).json()) as ReplicatePrediction;
+  if (!created.id) {
+    throw new Error("AI did not start. Try again.");
   }
-  if (prediction.status !== "succeeded") {
-    const detail =
-      typeof prediction.error === "string" ? prediction.error : JSON.stringify(prediction.error ?? "unknown");
-    throw new Error(`AI edit failed: ${detail.slice(0, 300)}`);
-  }
-  const output = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
-  if (typeof output !== "string" || !output.startsWith("http")) {
-    throw new Error("AI model returned no image. Try again.");
-  }
-  return output;
+  return created.id;
 }
 
 // Browsers send a CORS preflight (OPTIONS) before the real POST whenever
@@ -363,29 +349,21 @@ Deno.serve(async (req) => {
       signed.signedUrl,
       promptFor(row.tool_id, row.intensity, row.params),
     );
-    const outputUrl = await runPrediction(model, input);
+    // Fire-and-return: create the prediction, record it, hand off to the
+    // status function. Never wait for the model here.
+    const predictionId = await createPrediction(model, input);
 
-    // Replicate serves output files only with an Authorization header.
-    const outputRes = await fetch(outputUrl, {
-      headers: { Authorization: `Bearer ${REPLICATE_TOKEN}` },
-    });
-    if (!outputRes.ok) throw new Error("Could not download the AI result.");
-    const bytes = new Uint8Array(await outputRes.arrayBuffer());
-    const contentType = outputRes.headers.get("content-type") ?? "image/png";
-    const extension = contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg" : "png";
-    const ownerId = row.user_id ?? callerId;
-    const resultPath = `results/${ownerId}/${jobId}.${extension}`;
-    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(resultPath, bytes, {
-      contentType,
-      upsert: true,
-    });
-    if (uploadError) throw new Error(`Could not store the result: ${uploadError.message}`);
-
-    await supabase
+    const { error: markError } = await supabase
       .from("edit_jobs")
-      .update({ status: "succeeded", result_path: resultPath, error: null })
+      .update({
+        status: "processing",
+        started_at: new Date().toISOString(),
+        replicate_prediction_id: predictionId,
+        error: null,
+      })
       .eq("id", jobId);
-    return json({ ok: true, result_path: resultPath });
+    if (markError) throw new Error("Could not start the edit job.");
+    return json({ ok: true, job_id: jobId, prediction_id: predictionId });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Edit failed. Try again.";
     return await fail(message.slice(0, 500));
