@@ -13,3 +13,10 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Service workers update only when the browser can fetch a fresh copy.
+# Without this, users get trapped behind an old cached worker.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

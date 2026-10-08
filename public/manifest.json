@@ -1,0 +1,25 @@
+{
+  "name": "Pixeliia",
+  "short_name": "Pixeliia",
+  "description": "Pixeliia is a lightweight, one-click AI photo editor. Improve, transform, and personalize photos without writing prompts.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#5B4CFF",
+  "background_color": "#F7F7F4",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
