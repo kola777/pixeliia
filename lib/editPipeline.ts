@@ -29,6 +29,9 @@ const UPLOAD_TIMEOUT_MS = 60_000;
 const JOB_TIMEOUT_MS = 30_000;
 const INVOKE_TIMEOUT_MS = 150_000;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
+// Backstop over the whole backend path (sign-in, upload, job, worker,
+// resume polls, download): no single stall may ever outlive this.
+const OVERALL_TIMEOUT_MS = 300_000;
 
 async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -216,7 +219,11 @@ export async function runEdit(
   const startedAt = Date.now();
   try {
     const output = backend
-      ? await runBackendEdit(photoUri, toolId, intensity, params)
+      ? await withTimeout(
+          runBackendEdit(photoUri, toolId, intensity, params),
+          OVERALL_TIMEOUT_MS,
+          'Edit is taking too long. Try again on a stronger connection.'
+        )
       : await delay(900).then(() => photoUri);
     track('edit_succeeded', {
       tool: toolId,
