@@ -200,7 +200,11 @@ type ReplicatePrediction = {
   error?: unknown;
 };
 
-async function replicateFetch(path: string, init?: RequestInit): Promise<Response> {
+async function replicateFetch(
+  path: string,
+  init?: RequestInit,
+  retries = 2,
+): Promise<Response> {
   const response = await fetch(`https://api.replicate.com/v1${path}`, {
     ...init,
     headers: {
@@ -209,6 +213,21 @@ async function replicateFetch(path: string, init?: RequestInit): Promise<Respons
       ...(init?.headers ?? {}),
     },
   });
+  // Free-tier throttling (429) is transient: honor the server's retry_after
+  // a couple of times before surfacing it as a failure.
+  if (response.status === 429 && retries > 0) {
+    let waitMs = 10000;
+    try {
+      const limited = (await response.clone().json()) as { retry_after?: unknown };
+      if (typeof limited.retry_after === "number") {
+        waitMs = Math.min(60000, Math.max(1000, limited.retry_after * 1000));
+      }
+    } catch {
+      // Fall through with the default wait.
+    }
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    return replicateFetch(path, init, retries - 1);
+  }
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     throw new Error(`Replicate ${path} failed (${response.status}): ${body.slice(0, 300)}`);

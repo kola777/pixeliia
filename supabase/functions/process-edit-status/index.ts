@@ -54,11 +54,29 @@ type PredictionState = {
   error?: unknown;
 };
 
-async function fetchPrediction(predictionId: string): Promise<PredictionState | null> {
+async function fetchPrediction(
+  predictionId: string,
+  retries = 1,
+): Promise<PredictionState | null> {
   const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
     headers: { Authorization: `Bearer ${REPLICATE_TOKEN}` },
   });
   if (response.status === 404) return null;
+  // Free-tier throttling is transient: wait out retry_after once, then treat
+  // a repeat as a real failure for the caller to surface or retry later.
+  if (response.status === 429 && retries > 0) {
+    let waitMs = 10000;
+    try {
+      const limited = (await response.clone().json()) as { retry_after?: unknown };
+      if (typeof limited.retry_after === "number") {
+        waitMs = Math.min(30000, Math.max(1000, limited.retry_after * 1000));
+      }
+    } catch {
+      // Fall through with the default wait.
+    }
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    return fetchPrediction(predictionId, retries - 1);
+  }
   if (!response.ok) {
     throw new Error(`Prediction check failed (${response.status}).`);
   }
