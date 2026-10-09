@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -17,6 +17,7 @@ import Slider from '@react-native-community/slider';
 
 import { AGE_PRESETS, toolById } from '@/constants/tools';
 import { useEditor } from '@/context/EditorContext';
+import { classifyEditError } from '@/lib/editErrors';
 import { runEdit, type EditParams } from '@/lib/editPipeline';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { pickPhotoFromLibrary } from '@/lib/pickPhoto';
@@ -34,7 +35,18 @@ export default function EditorScreen() {
   const { photoUri, resultUri, intensity, setPhoto, setResult, setIntensity } = useEditor();
   const [busy, setBusy] = useState(false);
   const [showAfter, setShowAfter] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ toolId: string; message: string } | null>(null);
+
+  const fail = useCallback(
+    (message: string) => {
+      setFailure({ toolId: tool?.id ?? '', message });
+    },
+    [tool]
+  );
+
+  const clearFailure = useCallback(() => {
+    setFailure(null);
+  }, []);
   const [age, setAge] = useState(30);
   const [variant, setVariant] = useState<string | null>(null);
   const lastRunKey = useRef<string | null>(null);
@@ -57,13 +69,13 @@ export default function EditorScreen() {
     if (!photoUri || !tool || busy) return;
     lastRunKey.current = currentKey(photoUri);
     setBusy(true);
-    setError(null);
+    clearFailure();
     try {
       const output = await runEdit(photoUri, tool.id, intensity, currentParams());
       setResult(output);
       setShowAfter(true);
-    } catch {
-      setError('Edit failed. Try again.');
+    } catch (err) {
+      fail(classifyEditError(err).userMessage);
     } finally {
       setBusy(false);
     }
@@ -86,14 +98,14 @@ export default function EditorScreen() {
 
     async function run(uri: string, toolId: string, level: number, params: EditParams) {
       setBusy(true);
-      setError(null);
+      clearFailure();
       try {
         const output = await runEdit(uri, toolId, level, params);
         if (cancelled) return;
         setResult(output);
         setShowAfter(true);
-      } catch {
-        if (!cancelled) setError('Edit failed. Try again.');
+      } catch (err) {
+        if (!cancelled) fail(classifyEditError(err).userMessage);
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -103,7 +115,7 @@ export default function EditorScreen() {
     return () => {
       cancelled = true;
     };
-  }, [photoUri, resultUri, tool, intensity, age, variant, busy, setResult]);
+  }, [photoUri, resultUri, tool, intensity, age, variant, busy, setResult, fail, clearFailure]);
 
   async function choosePhoto() {
     const uri = await pickPhotoFromLibrary();
@@ -118,7 +130,7 @@ export default function EditorScreen() {
     lastRunKey.current = currentKey(photoUri);
     setResult(null);
     setShowAfter(false);
-    setError(null);
+    clearFailure();
   }
 
   if (!tool) {
@@ -170,9 +182,9 @@ export default function EditorScreen() {
           </View>
         )}
 
-        {error ? (
+        {failure && failure.toolId === tool?.id ? (
           <View style={styles.errorRow}>
-            <Text style={styles.error}>{error}</Text>
+            <Text style={styles.error}>{failure.message}</Text>
             <Pressable
               onPress={applyEdit}
               disabled={busy}

@@ -22,9 +22,10 @@ const BUCKET = 'pixeliia';
 // Every network stage gets its own tripwire. Mobile connections stall
 // silently (no error, no resolution), so an unwrapped await means an
 // endless spinner. Failures throw so the editor can offer Retry.
-// INVOKE matches the platform's function wall-clock budget; the worker
-// polls Replicate server-side, so the app holds one connection until it
-// answers.
+// The worker only starts predictions; the client polls the status
+// function, so no single request is ever long-lived by design.
+const SIGNIN_TIMEOUT_MS = 30_000;
+const READ_TIMEOUT_MS = 30_000;
 const UPLOAD_TIMEOUT_MS = 60_000;
 const JOB_TIMEOUT_MS = 30_000;
 // Starting the worker must answer fast: it only creates the prediction.
@@ -113,14 +114,22 @@ async function runBackendEdit(
   if (!supabase) {
     throw new Error('Photo backend is not configured yet.');
   }
-  const userId = await ensureSignedIn();
+  const userId = await withTimeout(
+    ensureSignedIn(),
+    SIGNIN_TIMEOUT_MS,
+    'Sign-in is taking too long. Check your connection and try again.'
+  );
   if (!userId) {
     throw new Error('Could not sign in to the photo backend. Try again.');
   }
 
   const extension = photoUri.split('.').pop()?.split('?')[0]?.toLowerCase() === 'png' ? 'png' : 'jpg';
   const sourcePath = `uploads/${userId}/${Date.now()}.${extension}`;
-  const uploadBody = await readUploadBody(photoUri);
+  const uploadBody = await withTimeout(
+    readUploadBody(photoUri),
+    READ_TIMEOUT_MS,
+    'Could not read the photo. Try a different one.'
+  );
   const { error: uploadError } = await withTimeout(
     supabase.storage.from(BUCKET).upload(sourcePath, uploadBody, {
       contentType: extension === 'png' ? 'image/png' : 'image/jpeg',
